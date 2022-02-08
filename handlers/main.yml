@@ -1,0 +1,7 @@
+---
+- name: reload percona service
+  service:
+    name: mysql
+    state: restarted
+    enabled: true
+  listen: reload_percona

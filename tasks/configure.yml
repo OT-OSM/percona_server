@@ -1,0 +1,51 @@
+---
+- name: Get MySQL version
+  command: 'mysql --version'
+  register: mysql_cli_version
+  changed_when: false
+  check_mode: false
+
+- name: Copy percona global configuration file.
+  template:
+    src: mysqld.cnf.j2
+    dest: "{{ mysql_config_file }}"
+    owner: root
+    group: root
+    mode: 0644
+  notify: reload_percona
+
+- name: Create slow query log file
+  file:
+    path: "{{ mysql_slow_query_log_file }}"
+    state: touch
+    owner: mysql
+    group: mysql
+    mode: 0640
+  when: mysql_slow_query_log_enabled
+
+- name: Create datadir of MySQL
+  file:
+    path: "{{ mysql_datadir }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: 0755
+    setype: mysqld_db_t
+
+- name: Create error log file
+  file:
+    path: "{{ mysql_log_error }}"
+    state: touch
+    owner: mysql
+    group: mysql
+    mode: 0640
+  when:
+    - mysql_log | default(true)
+    - mysql_log_error | default(false)
+
+- name: Ensure MySQL is started and enabled
+  service:
+    name: "{{ mysql_daemon }}"
+    state: started
+    enabled: true
+  register: mysql_service_configuration

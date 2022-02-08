@@ -1,0 +1,86 @@
+---
+- name: Install Percona Backup
+  apt:
+    name: "{{ item }}"
+    update_cache: true
+    state: present
+  with_items:
+    - "percona-xtrabackup-{% if version < 8.0 %}24{% else %}80{% endif %}"
+    - qpress
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Ensure backup user exists on master.
+  mysql_user:
+    name: "{{ mysql_backup_user.name }}"
+    host: "localhost"
+    password: "{{ mysql_backup_user.password }}"
+    login_password: "{{ mysql_root_password }}"
+    login_port: "{{ mysql_port }}"
+    priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
+    state: present
+  when:
+    - mysql_replication_user is defined
+    - inventory_hostname in groups['master']
+
+- name: Add the user 'backup' to the group 'mysql'
+  user:
+    name: backup
+    groups: mysql
+    append: true
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Download scripts
+  copy:
+    src: "{{ item }}"
+    dest: /usr/local/bin/
+    mode: '0755'
+  with_items:
+    - backup-mysql.sh
+    - extract-mysql.sh
+    - prepare-mysql.sh
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Copy backup configuration file.
+  template:
+    src: backup.cnf.j2
+    dest: "{{ mysql_backup_config_file }}"
+    owner: backup
+    mode: 0600
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Create backup directory
+  file:
+    path: "{{ mysql_backup_directory }}"
+    state: directory
+    owner: backup
+    group: mysql
+    mode: 0750
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Generate an OpenSSL private key with the default values (4096 bits, RSA) and a passphrase
+  command: "openssl rand -base64 24"
+  register: encryption_key
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+
+- name: Create encryption_key for backup
+  copy:
+    content: "{{ encryption_key.stdout }}"
+    dest: "/backups/mysql/encryption_key"
+    owner: backup
+    group: backup
+    mode: 0600
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']

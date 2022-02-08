@@ -1,0 +1,14 @@
+---
+- name: Ensure MySQL databases are present.
+  mysql_db:
+    login_password: "{{ mysql_root_password }}"
+    login_port: "{{ mysql_port }}"
+    name: "{{ item.name }}"
+    collation: "{{ item.collation | default('utf8_general_ci') }}"
+    encoding: "{{ item.encoding | default('utf8') }}"
+    state: "{{ item.state | default('present') }}"
+  with_items: "{{ mysql_databases }}"
+  tags:
+    - create_database
+  when:
+    - inventory_hostname not in groups['slave']
