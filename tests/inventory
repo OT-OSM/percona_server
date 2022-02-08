@@ -1,0 +1,12 @@
+[master]
+
+[slave]
+
+[mysql]
+localhost
+
+[mysql_cluster:children]
+mysql
+
+[mysql_cluster:vars]
+ansible_user=ubuntu

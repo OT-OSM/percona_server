@@ -1,0 +1,28 @@
+---
+version: 5.7
+percona_packages:
+  - gnupg2
+  - python3-pip
+  - percona-server-server{% if version == 5.7 %}-{{ version }}{% endif %}
+mysql_daemon: mysql
+mysql_config_file: /etc/mysql/my.cnf
+mysql_slow_query_log_file: /var/log/mysql/mysql-slow.log
+mysql_socket: /var/run/mysqld/mysqld.sock
+mysql_pid_file: /var/run/mysqld/mysqld.pid
+mysql_log_error: /var/log/mysql/mysql.err
+mysql_root_username: root
+mysql_root_password: N0Tweak$_@123!
+mysql_supports_innodb_large_prefix: true
+mysql_install_packages: true
+
+replication: true
+mysql_replication_user: {name: slave, password: slaveMaster@123!}
+
+backup: true
+mysql_backup_user: {name: backup, password: backUpMaster@123!}
+mysql_backup_config_file: /etc/mysql/backup.cnf
+mysql_backup_directory: /backups/mysql
+
+database_creation: true
+
+users_creation: true

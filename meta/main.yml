@@ -1,0 +1,28 @@
+---
+galaxy_info:
+  author: Abhishek Vishwakarma
+  description: Install and configure Percona Server 5.7 or greater with CIS best practices
+  company: Opstree Solutions
+  license: GPLv3
+  min_ansible_version: 2.12
+  role_name: percona_server
+  namespace: opstree_devops
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - bionic
+
+
+  galaxy_tags:
+    - opstree
+    - otosm
+    - percona
+    - mysql
+    - cisbenchmark
+    - database
+    - devsecops
+    - devops
+
+dependencies: []

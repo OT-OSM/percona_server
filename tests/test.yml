@@ -1,0 +1,5 @@
+---
+- hosts: mysql_cluster
+  remote_user: root
+  roles:
+    - percona
