@@ -50,6 +50,11 @@ We have categorized variables into two part i.e. **[Manadatory]()** and **[Optio
 |mysql_max_binlog_size | `100M` | *Size in MB* | Maximum size of bin log files in MySQL |
 |mysql_binlog_format | `MIXED` | ROW or COLOUMN or MIXED | Binlog format of MySQL |
 |version | 5.7 | *MySQL Version greater than 5.7* | Which version of MySQL you want to install on Debian System |
+|mysql_exporter_version | `0.15.1` | *Exporter Version* | Version of mysqld_exporter to be installed |
+|mysql_exporter_user | `mysqld_exporter` | *Any Username* | System user to run mysqld_exporter service |
+|mysql_exporter_port | `9104` | *Port Number* | Port on which MySQL exporter exposes metrics |
+|mysql_exporter_db_user | `mysqld_exporter` | *Any Username* | MySQL user for exporter to access metrics |
+|mysql_exporter_db_password | `StrongExporterPassword123!` | *Any Strong Password* | Password for MySQL exporter database user |
 
 The rest of the things are in [defaults](./defaults/main.yml)
 
