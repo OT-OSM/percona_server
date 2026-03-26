@@ -1,6 +1,6 @@
 ---
 - name: Ensure MySQL databases are present.
-  mysql_db:
+  community.mysql.mysql_db:
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
     name: "{{ item.name }}"

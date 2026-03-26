@@ -1,22 +1,22 @@
 ---
 - name: "Update apt cache"
-  apt:
+  ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 300
 
 - name: Add Percona Repository
-  apt:
+  ansible.builtin.apt:
     autoremove: true
     update_cache: true
     deb: https://repo.percona.com/apt/percona-release_latest.{{ ansible_lsb.codename }}_all.deb
     state: present
 
 - name: "Enable Percona repository"
-  command: "percona-release setup ps-{{ version | replace('.', '') }}"
+  ansible.builtin.command: "percona-release setup ps-{{ version | replace('.', '') }}"
   changed_when: true
 
 - name: Install Percona Server
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     update_cache: true
     state: present

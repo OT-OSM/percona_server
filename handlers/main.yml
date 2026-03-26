@@ -1,7 +1,11 @@
 ---
-- name: reload percona service
-  service:
+- name: Reload percona service
+  ansible.builtin.service:
     name: mysql
     state: restarted
     enabled: true
   listen: reload_percona
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true

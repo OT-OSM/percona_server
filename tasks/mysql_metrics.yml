@@ -1,6 +1,4 @@
-# -------------------------------------------------
-# MySQL Exporter (Metrics ONLY)
-# -------------------------------------------------
+---
 
 - name: Create mysqld_exporter system user
   ansible.builtin.user:
@@ -60,6 +58,9 @@
 - name: Install mysqld_exporter systemd service
   ansible.builtin.copy:
     dest: /etc/systemd/system/mysqld_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
     content: |
       [Unit]
       Description=Prometheus MySQL Exporter
@@ -77,13 +78,10 @@
       WantedBy=multi-user.target
   tags: mysql_metrics
 
-- name: Reload systemd
-  ansible.builtin.command: systemctl daemon-reexec
-  tags: mysql_metrics
-
 - name: Enable & start mysqld_exporter
   ansible.builtin.service:
     name: mysqld_exporter
     state: started
     enabled: true
   tags: mysql_metrics
+  notify: Reload systemd

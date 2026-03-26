@@ -1,6 +1,6 @@
 ---
 - name: Install Percona Backup
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     update_cache: true
     state: present
@@ -12,7 +12,7 @@
     - inventory_hostname in groups['slave']
 
 - name: Ensure backup user exists on master.
-  mysql_user:
+  community.mysql.mysql_user:
     name: "{{ mysql_backup_user.name }}"
     host: "localhost"
     password: "{{ mysql_backup_user.password }}"
@@ -25,7 +25,7 @@
     - inventory_hostname in groups['master']
 
 - name: Add the user 'backup' to the group 'mysql'
-  user:
+  ansible.builtin.user:
     name: backup
     groups: mysql
     append: true
@@ -34,7 +34,7 @@
     - inventory_hostname in groups['slave']
 
 - name: Download scripts
-  copy:
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/local/bin/
     mode: '0755'
@@ -47,40 +47,40 @@
     - inventory_hostname in groups['slave']
 
 - name: Copy backup configuration file.
-  template:
+  ansible.builtin.template:
     src: backup.cnf.j2
     dest: "{{ mysql_backup_config_file }}"
     owner: backup
-    mode: 0600
+    mode: "0600"
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
 - name: Create backup directory
-  file:
+  ansible.builtin.file:
     path: "{{ mysql_backup_directory }}"
     state: directory
     owner: backup
     group: mysql
-    mode: 0750
+    mode: "0750"
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
 - name: Generate an OpenSSL private key with the default values (4096 bits, RSA) and a passphrase
-  command: "openssl rand -base64 24"
+  ansible.builtin.command: "openssl rand -base64 24"
   register: encryption_key
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
 - name: Create encryption_key for backup
-  copy:
+  ansible.builtin.copy:
     content: "{{ encryption_key.stdout }}"
     dest: "/backups/mysql/encryption_key"
     owner: backup
     group: backup
-    mode: 0600
+    mode: "0600"
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']

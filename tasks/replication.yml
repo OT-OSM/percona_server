@@ -1,19 +1,19 @@
 ---
 - name: Restarting MySQL before replication setup
-  systemd:
+  ansible.builtin.systemd:
     name: mysql
     state: restarted
 
 - name: Setting facts for master
-  set_fact:
-    master_address: "{{ hostvars[groups['master'][0]].ipv4_address|default(hostvars[groups['master'][0]]['ansible_default_ipv4']['address']) }}"
+  ansible.builtin.set_fact:
+    master_address: "{{ hostvars[groups['master'][0]].ipv4_address | default(hostvars[groups['master'][0]]['ansible_default_ipv4']['address']) }}"
 
 - name: Setting facts for slave
-  set_fact:
+  ansible.builtin.set_fact:
     slave_address: "{{ groups['slave'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
 
 - name: Ensure replication user exists on master.
-  mysql_user:
+  community.mysql.mysql_user:
     name: "{{ mysql_replication_user.name }}"
     host: "{{ item }}"
     password: "{{ mysql_replication_user.password }}"
@@ -27,7 +27,7 @@
     - inventory_hostname in groups['master']
 
 - name: Check slave replication status.
-  mysql_replication:
+  community.mysql.mysql_replication:
     mode: getreplica
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
@@ -38,7 +38,7 @@
     - mysql_replication_user.name is defined
 
 - name: Check master replication status.
-  mysql_replication:
+  community.mysql.mysql_replication:
     mode: getprimary
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
@@ -47,7 +47,7 @@
     - inventory_hostname in groups['master']
 
 - name: Configure replication on the slave.
-  mysql_replication:
+  community.mysql.mysql_replication:
     mode: changeprimary
     primary_host: "{{ master_address }}"
     primary_user: "{{ mysql_replication_user.name }}"
@@ -65,7 +65,7 @@
     - mysql_replication_user.password is defined
 
 - name: Start replication.
-  mysql_replication:
+  community.mysql.mysql_replication:
     mode: startreplica
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
