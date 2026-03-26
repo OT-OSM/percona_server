@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: Abhishek Vishwakarma
-  description: Install and configure Percona Server 5.7 or greater with CIS best practices
+  description: Install and configure Percona Server 8.0 or greater with CIS best practices
   company: Opstree Solutions
   license: GPLv3
   min_ansible_version: "2.12"
@@ -11,9 +11,8 @@ galaxy_info:
   platforms:
     - name: Ubuntu
       versions:
+        - noble
         - focal
-        - bionic
-
 
   galaxy_tags:
     - opstree

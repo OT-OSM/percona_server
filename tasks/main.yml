@@ -45,3 +45,4 @@
   ansible.builtin.include_tasks: mysql_metrics.yml
   tags:
     - mysql_metrics
+  when: mysql_metrics_enabled | default(true)

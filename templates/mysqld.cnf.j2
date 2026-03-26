@@ -49,36 +49,29 @@ slow_query_log_file = {{ mysql_slow_query_log_file }}
 long_query_time = {{ mysql_slow_query_time }}
 {% endif %}
 
-{% if inventory_hostname in groups['slave'] %}
-# Replication
+{% if inventory_hostname in groups['master'] | default([]) %}
+# Replication - Primary (Master)
 server-id = {{ mysql_server_id }}
-{% endif %}
-
-{% if inventory_hostname in groups['master'] %}
-# Replication
-server-id = {{ mysql_server_id }}
-
-{% if inventory_hostname in groups['master'] %}
 log_bin = mysql-bin
 log-bin-index = mysql-bin.index
 expire_logs_days = {{ mysql_expire_logs_days }}
 max_binlog_size = {{ mysql_max_binlog_size }}
-binlog_format = {{mysql_binlog_format}}
+binlog_format = {{ mysql_binlog_format }}
 
 {% for db in mysql_databases %}
-{% if db.replicate|default(1) %}
+{% if db.replicate | default(1) %}
 binlog_do_db = {{ db.name }}
 {% else %}
 binlog_ignore_db = {{ db.name }}
 {% endif %}
 {% endfor %}
-{% endif %}
 
-{% if inventory_hostname in groups['slave'] %}
+{% elif inventory_hostname in groups['slave'] | default([]) %}
+# Replication - Replica (Slave)
+server-id = {{ mysql_server_id }}
 read_only
 relay-log = relay-bin
 relay-log-index = relay-bin.index
-{% endif %}
 {% endif %}
 
 # Disabling symbolic-links is recommended to prevent assorted security risks

@@ -1,17 +1,17 @@
 ---
-- name: Install Percona Backup
+- name: Install Percona Backup packages
   ansible.builtin.apt:
     name: "{{ item }}"
     update_cache: true
     state: present
-  with_items:
-    - "percona-xtrabackup-{% if version < 8.0 %}24{% else %}80{% endif %}"
+  loop:
+    - "percona-xtrabackup-{% if version is version_compare('8.0', '<') %}24{% else %}80{% endif %}"
     - qpress
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Ensure backup user exists on master.
+- name: Ensure backup user exists on master
   community.mysql.mysql_user:
     name: "{{ mysql_backup_user.name }}"
     host: "localhost"
@@ -20,6 +20,7 @@
     login_port: "{{ mysql_port }}"
     priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
     state: present
+  no_log: true
   when:
     - mysql_replication_user is defined
     - inventory_hostname in groups['master']
@@ -33,12 +34,12 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Download scripts
+- name: Copy backup scripts to /usr/local/bin
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/local/bin/
     mode: '0755'
-  with_items:
+  loop:
     - backup-mysql.sh
     - extract-mysql.sh
     - prepare-mysql.sh
@@ -46,11 +47,12 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Copy backup configuration file.
+- name: Copy backup configuration file
   ansible.builtin.template:
     src: backup.cnf.j2
     dest: "{{ mysql_backup_config_file }}"
     owner: backup
+    group: backup
     mode: "0600"
   when:
     - mysql_backup_server is defined
@@ -67,20 +69,34 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Generate an OpenSSL private key with the default values (4096 bits, RSA) and a passphrase
-  ansible.builtin.command: "openssl rand -base64 24"
-  register: encryption_key
+# Check if the encryption key already exists before generating a new one.
+# Regenerating the key on every run would make all previously-encrypted backups
+# undecryptable, causing silent, catastrophic data-loss scenarios.
+- name: Check if backup encryption key already exists
+  ansible.builtin.stat:
+    path: "{{ mysql_backup_directory }}/encryption_key"
+  register: enc_key_stat
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Create encryption_key for backup
+- name: Generate backup encryption key (only on first run)
+  ansible.builtin.command: "openssl rand -base64 24"
+  register: encryption_key
+  changed_when: true
+  when:
+    - mysql_backup_server is defined
+    - inventory_hostname in groups['slave']
+    - not enc_key_stat.stat.exists
+
+- name: Write encryption key to file
   ansible.builtin.copy:
     content: "{{ encryption_key.stdout }}"
-    dest: "/backups/mysql/encryption_key"
+    dest: "{{ mysql_backup_directory }}/encryption_key"
     owner: backup
     group: backup
     mode: "0600"
   when:
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
+    - not enc_key_stat.stat.exists

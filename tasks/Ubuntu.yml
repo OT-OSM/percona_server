@@ -8,22 +8,28 @@
   ansible.builtin.apt:
     autoremove: true
     update_cache: true
-    deb: https://repo.percona.com/apt/percona-release_latest.{{ ansible_lsb.codename }}_all.deb
+    deb: "https://repo.percona.com/apt/percona-release_latest.{{ ansible_lsb.codename }}_all.deb"
     state: present
+
+- name: Check if Percona repository already configured
+  ansible.builtin.command: "percona-release show"
+  register: percona_release_show
+  changed_when: false
+  failed_when: false
 
 - name: "Enable Percona repository"
   ansible.builtin.command: "percona-release setup ps-{{ version | replace('.', '') }}"
   changed_when: true
+  when: "'ps-' ~ (version | replace('.', '')) not in percona_release_show.stdout"
 
-- name: Install Percona Server
+- name: Install Percona Server packages
   ansible.builtin.apt:
     name: "{{ item }}"
     update_cache: true
     state: present
-  loop:
-    - '{{ percona_packages }}'
+  loop: "{{ percona_packages }}"
   notify:
-    - reload_percona
+    - restart_percona
 
 - name: Install PyMySQL via apt
   ansible.builtin.apt:

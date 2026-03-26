@@ -1,8 +1,4 @@
 ---
-- name: Restarting MySQL before replication setup
-  ansible.builtin.systemd:
-    name: mysql
-    state: restarted
 
 - name: Setting facts for master
   ansible.builtin.set_fact:
@@ -12,7 +8,7 @@
   ansible.builtin.set_fact:
     slave_address: "{{ groups['slave'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
 
-- name: Ensure replication user exists on master.
+- name: Ensure replication user exists on master
   community.mysql.mysql_user:
     name: "{{ mysql_replication_user.name }}"
     host: "{{ item }}"
@@ -21,32 +17,36 @@
     login_port: "{{ mysql_port }}"
     priv: "{{ mysql_replication_user.priv | default('*.*:REPLICATION SLAVE,REPLICATION CLIENT') }}"
     state: present
-  with_items: "{{ slave_address }}"
+  loop: "{{ slave_address }}"
+  no_log: true
   when:
     - mysql_replication_user.name is defined
     - inventory_hostname in groups['master']
 
-- name: Check slave replication status.
+- name: Check slave replication status
   community.mysql.mysql_replication:
     mode: getreplica
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
-  ignore_errors: true
-  register: slave
+  failed_when:
+    - slave_status.failed is defined
+    - slave_status.failed
+    - "'unable to connect' in (slave_status.msg | default(''))"
+  register: slave_status
   when:
     - inventory_hostname in groups['slave']
     - mysql_replication_user.name is defined
 
-- name: Check master replication status.
+- name: Check master replication status
   community.mysql.mysql_replication:
     mode: getprimary
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
-  register: master
+  register: master_status
   when:
     - inventory_hostname in groups['master']
 
-- name: Configure replication on the slave.
+- name: Configure replication on the slave
   community.mysql.mysql_replication:
     mode: changeprimary
     primary_host: "{{ master_address }}"
@@ -55,21 +55,27 @@
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
     primary_password: "{{ mysql_replication_user.password }}"
-    primary_log_file: "{{ hostvars[groups['master'][0]].master.File }}"
-    primary_log_pos: "{{ hostvars[groups['master'][0]].master.Position }}"
-  ignore_errors: true
+    primary_log_file: "{{ hostvars[groups['master'][0]].master_status.File }}"
+    primary_log_pos: "{{ hostvars[groups['master'][0]].master_status.Position }}"
+  no_log: true
+  failed_when:
+    - configure_replica is failed
+    - "'already' not in (configure_replica.msg | default(''))"
+  register: configure_replica
   when:
-    - (slave.Is_Replica is defined and not slave.Is_Replica) or (slave.Is_Replica is not defined and slave is failed)
+    - (slave_status.Is_Replica is defined and not slave_status.Is_Replica) or
+      (slave_status.Is_Replica is not defined and slave_status is failed)
     - inventory_hostname in groups['slave']
     - mysql_replication_user.name is defined
     - mysql_replication_user.password is defined
 
-- name: Start replication.
+- name: Start replication
   community.mysql.mysql_replication:
     mode: startreplica
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
   when:
-    - (slave.Is_Replica is defined and not slave.Is_Replica) or (slave.Is_Replica is not defined and slave is failed)
+    - (slave_status.Is_Replica is defined and not slave_status.Is_Replica) or
+      (slave_status.Is_Replica is not defined and slave_status is failed)
     - inventory_hostname in groups['slave']
     - master_address is defined

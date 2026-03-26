@@ -15,7 +15,7 @@ mysql_slow_query_time: "2"
 # The following variable has a default value depending on operating system.
 mysql_slow_query_log_file: /var/log/mysql-slow.log
 
-# Memory settings (default values optimized ~512MB RAM).
+# Memory settings (default values optimized for ~512MB RAM).
 mysql_key_buffer_size: "256M"
 mysql_max_allowed_packet: "64M"
 mysql_table_open_cache: "256"
@@ -65,31 +65,53 @@ mysql_config_include_files: []
 #  - src: path/relative/to/playbook/file.cnf
 #  - { src: path/relative/to/playbook/anotherfile.cnf, force: yes }
 
+# Directory for additional MySQL config fragments (used with mysql_config_include_files).
+mysql_config_include_dir: /etc/mysql/conf.d
+
 ## Databases.
-mysql_databases:
-  - name: semaphore
-    collation: utf8_general_ci
-    encoding: utf8
-    replicate: 1
+# Override in group_vars / host_vars. Left empty to avoid accidental creation.
+mysql_databases: []
+#  - name: myapp_db
+#    collation: utf8_general_ci
+#    encoding: utf8
+#    replicate: 1
 
 # Users.
+# Override in group_vars / host_vars. Passwords should come from Ansible Vault.
 mysql_users:
-  - name: semaphore
-    host: "localhost"
-    password: "StrongPassword123!"
-    priv: "*.*:ALL"
+ - name: mysqld_exporter
+   host: "localhost"
+   password: "VaultThis@Password!123"
+   priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+#  - name: myapp_user
+#    host: "localhost"
+#    password: "VaultThis@Password!123"
+#    priv: "myapp_db.*:ALL"
 
-# Replication settings (replication is only enabled if master/user have values).
+# MySQL root credentials.
+# IMPORTANT: Override this via Ansible Vault in group_vars/host_vars!
+mysql_root_password: "N0Tweak$_@123!"
+
+# Replication settings (replication is only enabled if replication: true).
 mysql_server_id: "1"
 mysql_max_binlog_size: "100M"
 mysql_binlog_format: "MIXED"
 mysql_expire_logs_days: "10"
 
-# mysqld_exporter settings
+# Replication user credentials.
+# IMPORTANT: Override password via Ansible Vault!
+mysql_replication_user:
+  name: slave
+  password: "slaveMaster@123!"
+
+# Backup user credentials.
+# IMPORTANT: Override password via Ansible Vault!
+mysql_backup_user:
+  name: backup
+  password: "backUpMaster@123!"
+
+# mysqld_exporter toggle and settings.
+mysql_metrics_enabled: true
 mysql_exporter_version: "0.15.1"
 mysql_exporter_user: mysqld_exporter
 mysql_exporter_port: 9104
-
-# MySQL exporter DB user
-mysql_exporter_db_user: mysqld_exporter
-mysql_exporter_db_password: "StrongExporterPassword123!"
