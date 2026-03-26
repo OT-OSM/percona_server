@@ -1,7 +1,12 @@
 ---
-- name: reload percona service
-  service:
-    name: mysql
+- name: Restart percona service
+  ansible.builtin.service:
+    name: "{{ mysql_daemon }}"
     state: restarted
     enabled: true
-  listen: reload_percona
+  listen: restart_percona
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: Reload systemd

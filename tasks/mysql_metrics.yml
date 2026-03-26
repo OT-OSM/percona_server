@@ -1,0 +1,73 @@
+---
+- name: Create mysqld_exporter system user
+  ansible.builtin.user:
+    name: "{{ mysql_exporter_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+  tags: mysql_metrics
+
+- name: Download mysqld_exporter
+  ansible.builtin.unarchive:
+    src: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ mysql_exporter_version }}/mysqld_exporter-{{ mysql_exporter_version }}.linux-amd64.tar.gz"
+    dest: /tmp
+    remote_src: true
+  tags: mysql_metrics
+
+- name: Install mysqld_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/mysqld_exporter-{{ mysql_exporter_version }}.linux-amd64/mysqld_exporter"
+    dest: /usr/local/bin/mysqld_exporter
+    mode: "0755"
+    owner: root
+    group: root
+    remote_src: true
+  tags: mysql_metrics
+
+- name: Create exporter config directory
+  ansible.builtin.file:
+    path: /etc/mysqld_exporter
+    state: directory
+    owner: "{{ mysql_exporter_user }}"
+    group: "{{ mysql_exporter_user }}"
+    mode: "0700"
+  tags: mysql_metrics
+
+- name: Render exporter credentials file
+  ansible.builtin.template:
+    src: exporter.cnf.j2
+    dest: /etc/mysqld_exporter/.my.cnf
+    owner: "{{ mysql_exporter_user }}"
+    group: "{{ mysql_exporter_user }}"
+    mode: "0600"
+  tags: mysql_metrics
+
+- name: Install mysqld_exporter systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/mysqld_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Prometheus MySQL Exporter
+      After=network.target {{ mysql_daemon }}.service
+
+      [Service]
+      User={{ mysql_exporter_user }}
+      ExecStart=/usr/local/bin/mysqld_exporter \
+        --config.my-cnf=/etc/mysqld_exporter/.my.cnf \
+        --web.listen-address=:{{ mysql_exporter_port }}
+
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reload systemd
+  tags: mysql_metrics
+
+- name: Enable & start mysqld_exporter
+  ansible.builtin.service:
+    name: mysqld_exporter
+    state: started
+    enabled: true
+  tags: mysql_metrics

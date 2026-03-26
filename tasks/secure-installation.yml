@@ -1,49 +1,51 @@
 ---
-- name: Disallow root login remotely
-  command: 'mysql -NBe "{{ item }}"'
-  with_items:
-    - DELETE FROM mysql.user WHERE User='{{ mysql_root_username }}' AND Host NOT IN ('localhost', '127.0.0.1', '::1')
+- name: Check MySQL socket login
+  ansible.builtin.command: >
+    mysql --protocol=socket -S {{ mysql_socket }} -NBe "SELECT 1"
+  register: mysql_socket_check
   changed_when: false
+  failed_when: false
 
-- name: Get list of hosts for the root user.
-  command: mysql -NBe
-    "SELECT Host
-    FROM mysql.user
+- name: Disallow root login remotely
+  community.mysql.mysql_user:
+    name: "{{ mysql_root_username }}"
+    host: "%"
+    state: absent
+    login_unix_socket: "{{ mysql_socket }}"
+  when: mysql_socket_check.rc == 0
+
+- name: Get list of hosts for the anonymous user.
+  ansible.builtin.command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+  register: mysql_anonymous_hosts
+  changed_when: false
+  check_mode: false
+  when: mysql_socket_check.rc == 0
+
+- name: Remove anonymous MySQL users.
+  ansible.builtin.mysql_user:
+    name: ""
+    host: "{{ item }}"
+    state: absent
+  with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
+  when: mysql_socket_check.rc == 0
+
+- name: Get list of hosts for the root user
+  ansible.builtin.command: >
+    mysql -NBe
+    "SELECT Host FROM mysql.user
     WHERE User = '{{ mysql_root_username }}'
     ORDER BY (Host='localhost') ASC"
   register: mysql_root_hosts
   changed_when: false
   check_mode: false
-  when: mysql_install_packages | bool or mysql_root_password_update
+  when: mysql_socket_check.rc == 0
 
-- name: Get list of hosts for the anonymous user.
-  command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
-  register: mysql_anonymous_hosts
-  changed_when: false
-  check_mode: false
-
-- name: Remove anonymous MySQL users.
-  mysql_user:
-    name: ""
-    host: "{{ item }}"
-    state: absent
-  with_items: "{{ mysql_anonymous_hosts.stdout_lines|default([]) }}"
-
-- name: Update MySQL root password for localhost root account (5.7.x).
-  shell: >
+- name: Ensure root password is set
+  ansible.builtin.shell: >
     mysql -u root -NBe
     'ALTER USER "{{ mysql_root_username }}"@"{{ item }}"
     IDENTIFIED WITH mysql_native_password BY "{{ mysql_root_password }}";'
-  with_items: "{{ mysql_root_hosts.stdout_lines|default([]) }}"
-  when: >
-    ((mysql_install_packages | bool) or mysql_root_password_update)
-    and ('5.7.' in mysql_cli_version.stdout or '8.0.' in mysql_cli_version.stdout)
-
-- name: Update MySQL root password for localhost root account (< 5.7.x).
-  shell: >
-    mysql -NBe
-    'SET PASSWORD FOR "{{ mysql_root_username }}"@"{{ item }}" = PASSWORD("{{ mysql_root_password }}");'
-  with_items: "{{ mysql_root_hosts.stdout_lines|default([]) }}"
-  when: >
-    ((mysql_install_packages | bool) or mysql_root_password_update)
-    and ('5.7.' not in mysql_cli_version.stdout and '8.0.' not in mysql_cli_version.stdout)
+  with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
+  when:
+    - mysql_socket_check.rc == 0
+    - mysql_install_packages | bool or mysql_root_password_update

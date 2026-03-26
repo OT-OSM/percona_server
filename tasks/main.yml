@@ -3,38 +3,46 @@
 # Percona Server Installation #
 # ########################### #
 - name: Including tasks for Installation of Percona
-  include_tasks: "{{ ansible_distribution }}.yml"
+  ansible.builtin.include_tasks: "{{ ansible_distribution }}.yml"
 
 # ############################ #
 # Percona Server Configuration #
 # ############################ #
 - name: Including tasks for Configuring MySQL
-  include_tasks: configure.yml
+  ansible.builtin.include_tasks: configure.yml
 
 - name: Including tasks to Secure MySQL Installation
-  include_tasks: secure-installation.yml
+  ansible.builtin.include_tasks: secure-installation.yml
 
 # ############################# #
 # Percona Cluster Configuration #
 # ############################# #
 - name: Including tasks to Replication Setup
-  include_tasks: replication.yml
+  ansible.builtin.include_tasks: replication.yml
   when: replication
 
 # ################################### #
 # Percona Backup Server Configuration #
 # ################################### #
 - name: Including tasks to Backup Server Setup
-  include_tasks: backup.yml
+  ansible.builtin.include_tasks: backup.yml
   when: backup
 
 # ############################# #
 # Percona User and DB Operation #
 # ############################# #
 - name: Including tasks to database creation
-  include_tasks: database.yml
+  ansible.builtin.include_tasks: database.yml
   when: database_creation
 
 - name: Including tasks to user creation
-  include_tasks: users.yml
+  ansible.builtin.include_tasks: users.yml
+  tags:
+    - create_user
   when: users_creation
+
+- name: Including tasks to exporter metrics
+  ansible.builtin.include_tasks: mysql_metrics.yml
+  tags:
+    - mysql_metrics
+  when: mysql_metrics_enabled | default(true)
