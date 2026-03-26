@@ -11,8 +11,8 @@
 - name: Including tasks for Configuring MySQL
   include_tasks: configure.yml
 
-- name: Including tasks to Secure MySQL Installation
-  include_tasks: secure-installation.yml
+#- name: Including tasks to Secure MySQL Installation
+#  include_tasks: secure-installation.yml
 
 # ############################# #
 # Percona Cluster Configuration #
@@ -37,4 +37,11 @@
 
 - name: Including tasks to user creation
   include_tasks: users.yml
+  tags:
+    - create_user
   when: users_creation
+
+- name: Including tasks to exporter metrics
+  include_tasks: mysql_metrics.yml
+  tags:
+    - mysql_metrics

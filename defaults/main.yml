@@ -67,20 +67,29 @@ mysql_config_include_files: []
 
 ## Databases.
 mysql_databases:
-  - name: monitoring
+  - name: semaphore
     collation: utf8_general_ci
     encoding: utf8
     replicate: 1
 
 # Users.
 mysql_users:
-  - name: monitoring
-    host: "%"
-    password: monitoringSecret@123
-    priv: "*.*:SELECT"
+  - name: semaphore
+    host: "localhost"
+    password: "StrongPassword123!"
+    priv: "*.*:ALL"
 
 # Replication settings (replication is only enabled if master/user have values).
 mysql_server_id: "1"
 mysql_max_binlog_size: "100M"
 mysql_binlog_format: "MIXED"
 mysql_expire_logs_days: "10"
+
+# mysqld_exporter settings
+mysql_exporter_version: "0.15.1"
+mysql_exporter_user: mysqld_exporter
+mysql_exporter_port: 9104
+
+# MySQL exporter DB user
+mysql_exporter_db_user: mysqld_exporter
+mysql_exporter_db_password: "StrongExporterPassword123!"

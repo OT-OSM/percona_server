@@ -25,7 +25,7 @@
   notify:
     - reload_percona
 
-- name: Ensure pymysql package
-  pip:
-    name: pymysql
+- name: Install PyMySQL via apt
+  ansible.builtin.apt:
+    name: python3-pymysql
     state: present
