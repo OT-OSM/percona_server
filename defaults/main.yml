@@ -1,21 +1,32 @@
 ---
-# Set this to `true` to forcibly update the root password.
+# ===============================
+# MySQL Root Configuration
+# ===============================
+mysql_root_password: "N0Tweak$_@123!"
 mysql_root_password_update: false
 
-# MySQL connection settings.
+# ===============================
+# Connection Settings
+# ===============================
 mysql_port: "3306"
-mysql_bind_address: '0.0.0.0'
+mysql_bind_address: "0.0.0.0"
 mysql_skip_name_resolve: false
 mysql_datadir: /var/lib/mysql
-mysql_sql_mode: 'STRICT_ALL_TABLES'
+mysql_sql_mode: "STRICT_ALL_TABLES"
 
-# Slow query log settings.
+# Socket (CRITICAL for automation)
+mysql_login_unix_socket: /var/run/mysqld/mysqld.sock
+
+# ===============================
+# Slow Query Log
+# ===============================
 mysql_slow_query_log_enabled: true
 mysql_slow_query_time: "2"
-# The following variable has a default value depending on operating system.
 mysql_slow_query_log_file: /var/log/mysql-slow.log
 
-# Memory settings (default values optimized for ~512MB RAM).
+# ===============================
+# Memory Settings
+# ===============================
 mysql_key_buffer_size: "256M"
 mysql_max_allowed_packet: "64M"
 mysql_table_open_cache: "256"
@@ -33,85 +44,85 @@ mysql_max_heap_table_size: "16M"
 mysql_group_concat_max_len: "1024"
 mysql_join_buffer_size: "262144"
 
-# Other settings.
+# ===============================
+# Other Settings
+# ===============================
 mysql_lower_case_table_names: "0"
 mysql_wait_timeout: "28800"
 mysql_event_scheduler_state: "OFF"
 
-# InnoDB settings.
+# ===============================
+# InnoDB Settings
+# ===============================
 mysql_innodb_file_per_table: "1"
-# Set .._buffer_pool_size up to 80% of RAM but beware of setting too high.
 mysql_innodb_buffer_pool_size: "256M"
-# Set .._log_file_size to 25% of buffer pool size.
 mysql_innodb_log_file_size: "64M"
 mysql_innodb_log_buffer_size: "8M"
 mysql_innodb_flush_log_at_trx_commit: "1"
 mysql_innodb_lock_wait_timeout: "50"
-
-# These settings require MySQL > 5.5.
 mysql_innodb_large_prefix: "1"
 mysql_innodb_file_format: "barracuda"
 
-# mysqldump settings.
+# ===============================
+# mysqldump
+# ===============================
 mysql_mysqldump_max_allowed_packet: "64M"
 
-# Logging settings.
-mysql_log: ""
-# The following variables have a default value depending on operating system.
-# mysql_log_error: /var/log/mysql/mysql.err
-# mysql_syslog_tag: mysql
+# ===============================
+# Logging
+# ===============================
+mysql_log: false
 
+# ===============================
+# Config Includes
+# ===============================
 mysql_config_include_files: []
-#  - src: path/relative/to/playbook/file.cnf
-#  - { src: path/relative/to/playbook/anotherfile.cnf, force: yes }
-
-# Directory for additional MySQL config fragments (used with mysql_config_include_files).
 mysql_config_include_dir: /etc/mysql/conf.d
 
-## Databases.
-# Override in group_vars / host_vars. Left empty to avoid accidental creation.
+# ===============================
+# Databases
+# ===============================
 mysql_databases: []
-#  - name: myapp_db
-#    collation: utf8_general_ci
-#    encoding: utf8
-#    replicate: 1
+# Example:
+# - name: myapp_db
+#   collation: utf8_general_ci
+#   encoding: utf8
 
-# Users.
-# Override in group_vars / host_vars. Passwords should come from Ansible Vault.
+# ===============================
+# Users
+# ===============================
 mysql_users:
- - name: mysqld_exporter
-   host: "localhost"
-   password: "VaultThis@Password!123"
-   priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
-#  - name: myapp_user
-#    host: "localhost"
-#    password: "VaultThis@Password!123"
-#    priv: "myapp_db.*:ALL"
+  - name: mysqld_exporter
+    host: "%"
+    password: "VaultThis@Password!123"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
 
-# MySQL root credentials.
-# IMPORTANT: Override this via Ansible Vault in group_vars/host_vars!
-mysql_root_password: "N0Tweak$_@123!"
-
-# Replication settings (replication is only enabled if replication: true).
+# ===============================
+# Replication
+# ===============================
 mysql_server_id: "1"
 mysql_max_binlog_size: "100M"
-mysql_binlog_format: "MIXED"
-mysql_expire_logs_days: "10"
+mysql_binlog_format: "ROW"
+mysql_expire_logs_days: "7"
 
-# Replication user credentials.
-# IMPORTANT: Override password via Ansible Vault!
 mysql_replication_user:
   name: slave
   password: "slaveMaster@123!"
 
-# Backup user credentials.
-# IMPORTANT: Override password via Ansible Vault!
+# ===============================
+# Backup
+# ===============================
 mysql_backup_user:
   name: backup
   password: "backUpMaster@123!"
 
-# mysqld_exporter toggle and settings.
+# ===============================
+# mysqld_exporter
+# ===============================
 mysql_metrics_enabled: true
 mysql_exporter_version: "0.15.1"
 mysql_exporter_user: mysqld_exporter
 mysql_exporter_port: 9104
+
+mysql_exporter_db_user: mysqld_exporter
+mysql_exporter_db_password: "VaultThis@Password!123"

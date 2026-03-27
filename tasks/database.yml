@@ -1,13 +1,12 @@
 ---
-- name: Ensure MySQL databases are present.
+- name: Ensure MySQL databases are present
   community.mysql.mysql_db:
-    login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
     name: "{{ item.name }}"
     collation: "{{ item.collation | default('utf8_general_ci') }}"
     encoding: "{{ item.encoding | default('utf8') }}"
     state: "{{ item.state | default('present') }}"
-  with_items: "{{ mysql_databases }}"
+  loop: "{{ mysql_databases }}"
   tags:
     - create_database
   when:

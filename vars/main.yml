@@ -17,7 +17,7 @@ mysql_root_username: root
 mysql_supports_innodb_large_prefix: true
 mysql_install_packages: true
 
-replication: false
+replication: true
 backup: false
 
 mysql_backup_config_file: /etc/mysql/backup.cnf

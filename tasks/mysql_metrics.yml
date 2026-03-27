@@ -32,6 +32,18 @@
     mode: "0700"
   tags: mysql_metrics
 
+- name: Ensure mysqld_exporter DB user exists on this node
+  community.mysql.mysql_user:
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    name: "{{ mysql_exporter_db_user }}"
+    host: "%"
+    password: "{{ mysql_exporter_db_password }}"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+    plugin: mysql_native_password
+    state: present
+  no_log: true
+  tags: mysql_metrics
+
 - name: Render exporter credentials file
   ansible.builtin.template:
     src: exporter.cnf.j2
@@ -39,6 +51,7 @@
     owner: "{{ mysql_exporter_user }}"
     group: "{{ mysql_exporter_user }}"
     mode: "0600"
+  notify: Restart mysqld_exporter   
   tags: mysql_metrics
 
 - name: Install mysqld_exporter systemd service
@@ -57,12 +70,13 @@
       ExecStart=/usr/local/bin/mysqld_exporter \
         --config.my-cnf=/etc/mysqld_exporter/.my.cnf \
         --web.listen-address=:{{ mysql_exporter_port }}
-
       Restart=always
 
       [Install]
       WantedBy=multi-user.target
-  notify: Reload systemd
+  notify:
+    - Reload systemd daemon
+    - Restart mysqld_exporter
   tags: mysql_metrics
 
 - name: Enable & start mysqld_exporter

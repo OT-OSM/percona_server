@@ -10,3 +10,9 @@
   ansible.builtin.systemd:
     daemon_reload: true
   listen: Reload systemd
+
+- name: Restart mysqld_exporter
+  ansible.builtin.service:
+    name: mysqld_exporter
+    state: restarted
+
