@@ -1,18 +1,50 @@
 ---
 - name: Get MySQL version
-  ansible.builtin.command: 'mysql --version'
+  ansible.builtin.command: "mysql --version"
   register: mysql_cli_version
   changed_when: false
   check_mode: false
 
+# 🔥 Remove conflicting default config FIRST
+- name: Remove default MySQL config (avoid conflicts)
+  ansible.builtin.file:
+    path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    state: absent
+
+# 🔥 Apply our config
 - name: Copy percona global configuration file
   ansible.builtin.template:
     src: mysqld.cnf.j2
-    dest: "{{ mysql_config_file }}"
+    dest: /etc/mysql/my.cnf
     owner: root
     group: root
     mode: "0644"
-  notify: restart_percona
+
+# 🔥 CRITICAL: Restart immediately so config takes effect BEFORE replication
+- name: Restart MySQL immediately after config change
+  ansible.builtin.service:
+    name: "{{ mysql_daemon }}"
+    state: restarted
+
+# 🔥 Verify GTID BEFORE moving forward
+- name: Verify GTID is enabled
+  community.mysql.mysql_query:
+    query: "SHOW VARIABLES LIKE 'gtid_mode';"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+  register: gtid_check
+
+- name: Debug GTID value
+  ansible.builtin.debug:
+    msg: "GTID mode is {{ gtid_check.query_result[0][0].Value }}"
+
+- name: Fail if GTID is not enabled
+  ansible.builtin.fail:
+    msg: "GTID is still OFF! MySQL config not applied properly."
+  when: gtid_check.query_result[0][0].Value != "ON"
+
+# ===============================
+# Remaining setup
+# ===============================
 
 - name: Create slow query log file
   ansible.builtin.file:
