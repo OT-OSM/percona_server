@@ -1,10 +1,30 @@
 ---
-- name: Check MySQL socket login
+# =============================================================================
+# Secure Installation Tasks
+# Runs after MySQL starts. Uses Unix socket auth for the initial setup,
+# then switches to password auth once root password is set.
+# =============================================================================
+
+- name: Check MySQL socket login (pre-password state)
   ansible.builtin.command: >
     mysql --protocol=socket -S {{ mysql_socket }} -NBe "SELECT 1"
   register: mysql_socket_check
   changed_when: false
   failed_when: false
+
+# Install validate_password as a COMPONENT (not plugin).
+# In Percona/MySQL 8.0.26+ the old plugin-load=validate_password.so was removed.
+# The component is idempotent — safe to run even if already installed.
+- name: Install validate_password component
+  community.mysql.mysql_query:
+    query: "INSTALL COMPONENT 'file://component_validate_password'"
+    login_unix_socket: "{{ mysql_socket }}"
+  register: vp_install
+  failed_when:
+    - vp_install.failed is defined
+    - vp_install.failed
+    - "'already exists' not in (vp_install.msg | default(''))"
+  when: mysql_socket_check.rc == 0
 
 - name: Disallow root login remotely
   community.mysql.mysql_user:
@@ -14,25 +34,28 @@
     login_unix_socket: "{{ mysql_socket }}"
   when: mysql_socket_check.rc == 0
 
-- name: Get list of hosts for the anonymous user.
-  ansible.builtin.command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+- name: Get list of hosts for the anonymous user
+  ansible.builtin.command: >
+    mysql --protocol=socket -S {{ mysql_socket }}
+    -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
   register: mysql_anonymous_hosts
   changed_when: false
   check_mode: false
   when: mysql_socket_check.rc == 0
 
-- name: Remove anonymous MySQL users.
-  ansible.builtin.mysql_user:
+- name: Remove anonymous MySQL users
+  community.mysql.mysql_user:
     name: ""
     host: "{{ item }}"
     state: absent
+    login_unix_socket: "{{ mysql_socket }}"
   with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
   when: mysql_socket_check.rc == 0
 
 - name: Get list of hosts for the root user
   ansible.builtin.command: >
-    mysql -NBe
-    "SELECT Host FROM mysql.user
+    mysql --protocol=socket -S {{ mysql_socket }}
+    -NBe "SELECT Host FROM mysql.user
     WHERE User = '{{ mysql_root_username }}'
     ORDER BY (Host='localhost') ASC"
   register: mysql_root_hosts
@@ -42,10 +65,11 @@
 
 - name: Ensure root password is set
   ansible.builtin.shell: >
-    mysql -u root -NBe
+    mysql --protocol=socket -S {{ mysql_socket }} -u root -NBe
     'ALTER USER "{{ mysql_root_username }}"@"{{ item }}"
-    IDENTIFIED WITH mysql_native_password BY "{{ mysql_root_password }}";'
+    IDENTIFIED WITH caching_sha2_password BY "{{ mysql_root_password }}";'
   with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
+  no_log: true
   when:
     - mysql_socket_check.rc == 0
     - mysql_install_packages | bool or mysql_root_password_update

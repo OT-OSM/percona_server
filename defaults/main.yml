@@ -1,117 +1,153 @@
 ---
-# Set this to `true` to forcibly update the root password.
+# =============================================================================
+# Percona Server Role — Default Variables
+# Override these in group_vars / host_vars.
+# Secrets (passwords) MUST be overridden via Ansible Vault.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Feature Toggles
+# These live in defaults (not vars/) so they can be overridden from inventory,
+# group_vars, or Semaphore extra-vars without needing --extra-vars hacks.
+# -----------------------------------------------------------------------------
+replication:              false
+backup:                   false
+database_creation:        true
+users_creation:           true
+mysql_metrics_enabled:    true
 mysql_root_password_update: false
+mysql_install_packages:   true
 
-# MySQL connection settings.
-mysql_port: "3306"
-mysql_bind_address: '0.0.0.0'
-mysql_skip_name_resolve: false
-mysql_datadir: /var/lib/mysql
-mysql_sql_mode: 'STRICT_ALL_TABLES'
+# -----------------------------------------------------------------------------
+# MySQL Connection & General
+# -----------------------------------------------------------------------------
+mysql_port:               "3306"
+mysql_bind_address:       '0.0.0.0'
+mysql_skip_name_resolve:  false
+mysql_datadir:            /var/lib/mysql
+mysql_sql_mode:           'STRICT_ALL_TABLES'
 
-# Slow query log settings.
+# -----------------------------------------------------------------------------
+# Slow Query Log
+# -----------------------------------------------------------------------------
 mysql_slow_query_log_enabled: true
-mysql_slow_query_time: "2"
-# The following variable has a default value depending on operating system.
-mysql_slow_query_log_file: /var/log/mysql-slow.log
+mysql_slow_query_time:        "2"
 
-# Memory settings (default values optimized for ~512MB RAM).
-mysql_key_buffer_size: "256M"
-mysql_max_allowed_packet: "64M"
-mysql_table_open_cache: "256"
-mysql_sort_buffer_size: "1M"
-mysql_read_buffer_size: "1M"
-mysql_read_rnd_buffer_size: "4M"
-mysql_myisam_sort_buffer_size: "64M"
-mysql_thread_cache_size: "8"
-mysql_query_cache_type: "0"
-mysql_query_cache_size: "16M"
-mysql_query_cache_limit: "1M"
-mysql_max_connections: "151"
-mysql_tmp_table_size: "16M"
-mysql_max_heap_table_size: "16M"
-mysql_group_concat_max_len: "1024"
-mysql_join_buffer_size: "262144"
+# -----------------------------------------------------------------------------
+# Memory Settings (defaults tuned for ~512MB RAM — override per environment)
+# -----------------------------------------------------------------------------
+mysql_key_buffer_size:          "256M"
+mysql_max_allowed_packet:       "64M"
+mysql_table_open_cache:         "256"
+mysql_sort_buffer_size:         "1M"
+mysql_read_buffer_size:         "1M"
+mysql_read_rnd_buffer_size:     "4M"
+mysql_myisam_sort_buffer_size:  "64M"
+mysql_thread_cache_size:        "8"
+mysql_max_connections:          "151"
+mysql_tmp_table_size:           "16M"
+mysql_max_heap_table_size:      "16M"
+mysql_group_concat_max_len:     "1024"
+mysql_join_buffer_size:         "262144"
 
-# Other settings.
-mysql_lower_case_table_names: "0"
-mysql_wait_timeout: "28800"
-mysql_event_scheduler_state: "OFF"
+# query_cache_* variables are intentionally omitted — removed in MySQL 8.0.
 
-# InnoDB settings.
-mysql_innodb_file_per_table: "1"
-# Set .._buffer_pool_size up to 80% of RAM but beware of setting too high.
-mysql_innodb_buffer_pool_size: "256M"
-# Set .._log_file_size to 25% of buffer pool size.
-mysql_innodb_log_file_size: "64M"
-mysql_innodb_log_buffer_size: "8M"
-mysql_innodb_flush_log_at_trx_commit: "1"
-mysql_innodb_lock_wait_timeout: "50"
+# -----------------------------------------------------------------------------
+# Other Settings
+# -----------------------------------------------------------------------------
+mysql_lower_case_table_names:   "0"
+mysql_wait_timeout:             "28800"
+mysql_event_scheduler_state:    "OFF"
 
-# These settings require MySQL > 5.5.
-mysql_innodb_large_prefix: "1"
-mysql_innodb_file_format: "barracuda"
+# -----------------------------------------------------------------------------
+# InnoDB Settings
+# -----------------------------------------------------------------------------
+mysql_innodb_file_per_table:            "1"
+# Tune innodb_buffer_pool_size to ~70% of available RAM in production.
+mysql_innodb_buffer_pool_size:          "256M"
+# innodb_log_file_size should be ~25% of buffer pool size.
+mysql_innodb_log_file_size:             "64M"
+mysql_innodb_log_buffer_size:           "8M"
+mysql_innodb_flush_log_at_trx_commit:   "1"
+mysql_innodb_lock_wait_timeout:         "50"
 
-# mysqldump settings.
+# innodb_large_prefix and innodb_file_format are intentionally omitted —
+# both were removed in MySQL 8.0.
+
+# -----------------------------------------------------------------------------
+# mysqldump
+# -----------------------------------------------------------------------------
 mysql_mysqldump_max_allowed_packet: "64M"
 
-# Logging settings.
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
 mysql_log: ""
-# The following variables have a default value depending on operating system.
-# mysql_log_error: /var/log/mysql/mysql.err
-# mysql_syslog_tag: mysql
+# mysql_log_error and mysql_syslog_tag have OS-specific defaults in vars/main.yml
 
+# -----------------------------------------------------------------------------
+# Config Include Files
+# -----------------------------------------------------------------------------
 mysql_config_include_files: []
 #  - src: path/relative/to/playbook/file.cnf
 #  - { src: path/relative/to/playbook/anotherfile.cnf, force: yes }
-
-# Directory for additional MySQL config fragments (used with mysql_config_include_files).
 mysql_config_include_dir: /etc/mysql/conf.d
 
-## Databases.
-# Override in group_vars / host_vars. Left empty to avoid accidental creation.
+# -----------------------------------------------------------------------------
+# Databases  (override in group_vars / host_vars)
+# -----------------------------------------------------------------------------
 mysql_databases: []
 #  - name: myapp_db
 #    collation: utf8_general_ci
 #    encoding: utf8
 #    replicate: 1
 
-# Users.
-# Override in group_vars / host_vars. Passwords should come from Ansible Vault.
+# -----------------------------------------------------------------------------
+# Users  (override in group_vars / host_vars — passwords via Ansible Vault)
+# -----------------------------------------------------------------------------
 mysql_users:
- - name: mysqld_exporter
-   host: "localhost"
-   password: "VaultThis@Password!123"
-   priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+  - name: mysqld_exporter
+    host: "localhost"
+    password: "{{ mysql_exporter_db_password }}"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
 #  - name: myapp_user
 #    host: "localhost"
 #    password: "VaultThis@Password!123"
 #    priv: "myapp_db.*:ALL"
 
-# MySQL root credentials.
-# IMPORTANT: Override this via Ansible Vault in group_vars/host_vars!
+# -----------------------------------------------------------------------------
+# Root Credentials  — MUST override via Ansible Vault
+# -----------------------------------------------------------------------------
 mysql_root_password: "N0Tweak$_@123!"
 
-# Replication settings (replication is only enabled if replication: true).
-mysql_server_id: "1"
+# -----------------------------------------------------------------------------
+# Replication Settings
+# mysql_server_id MUST be unique per host — set in inventory as host_var.
+# -----------------------------------------------------------------------------
+mysql_server_id:      "1"
 mysql_max_binlog_size: "100M"
-mysql_binlog_format: "MIXED"
-mysql_expire_logs_days: "10"
+mysql_binlog_format:   "ROW"
+# expire_logs_days was removed in MySQL 8.0.26.
+# Use binlog_expire_logs_seconds instead (864000 = 10 days).
+mysql_binlog_expire_logs_seconds: "864000"
 
-# Replication user credentials.
-# IMPORTANT: Override password via Ansible Vault!
+# Replication user — MUST override password via Ansible Vault
 mysql_replication_user:
   name: slave
   password: "slaveMaster@123!"
 
-# Backup user credentials.
-# IMPORTANT: Override password via Ansible Vault!
+# Backup user — MUST override password via Ansible Vault
 mysql_backup_user:
   name: backup
   password: "backUpMaster@123!"
 
-# mysqld_exporter toggle and settings.
-mysql_metrics_enabled: true
-mysql_exporter_version: "0.15.1"
-mysql_exporter_user: mysqld_exporter
-mysql_exporter_port: 9104
+# -----------------------------------------------------------------------------
+# Prometheus mysqld_exporter
+# -----------------------------------------------------------------------------
+mysql_exporter_version:     "0.15.1"
+mysql_exporter_user:        mysqld_exporter
+mysql_exporter_port:        9104
+# DB user/password the exporter connects with (rendered into exporter.cnf.j2)
+mysql_exporter_db_user:     mysqld_exporter
+# MUST override via Ansible Vault
+mysql_exporter_db_password: "Exporter@123!"

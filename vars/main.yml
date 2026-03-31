@@ -1,4 +1,9 @@
 ---
+# =============================================================================
+# Percona Server Role — Internal Role Constants
+# These are role internals, NOT meant to be overridden by users.
+# User-facing toggles and tuning variables belong in defaults/main.yml.
+# =============================================================================
 
 version: "8.0"
 
@@ -7,21 +12,18 @@ percona_packages:
   - python3-pip
   - "percona-server-server"
 
-mysql_daemon: mysql
-mysql_config_file: /etc/mysql/my.cnf
+mysql_daemon:             mysql
+mysql_config_file:        /etc/mysql/my.cnf
 mysql_slow_query_log_file: /var/log/mysql/mysql-slow.log
-mysql_socket: /var/run/mysqld/mysqld.sock
-mysql_pid_file: /var/run/mysqld/mysqld.pid
-mysql_log_error: /var/log/mysql/mysql.err
-mysql_root_username: root
-mysql_supports_innodb_large_prefix: true
-mysql_install_packages: true
+mysql_socket:             /var/run/mysqld/mysqld.sock
+mysql_pid_file:           /var/run/mysqld/mysqld.pid
+mysql_log_error:          /var/log/mysql/mysql.err
+mysql_root_username:      root
 
-replication: false
-backup: false
+# replication and backup have been moved to defaults/main.yml so they can be
+# overridden from inventory, group_vars, or Semaphore extra-vars.
+# DO NOT re-add them here — vars/ takes higher precedence and would
+# silently ignore any override attempt.
 
 mysql_backup_config_file: /etc/mysql/backup.cnf
-mysql_backup_directory: /backups/mysql
-
-database_creation: true
-users_creation: true
+mysql_backup_directory:   /backups/mysql
