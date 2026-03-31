@@ -1,14 +1,14 @@
 ---
 
-- name: Setting facts for master
+- name: Setting facts for percona-master
   ansible.builtin.set_fact:
-    master_address: "{{ hostvars[groups['master'][0]].ipv4_address | default(hostvars[groups['master'][0]]['ansible_default_ipv4']['address']) }}"
+    master_address: "{{ hostvars[groups['percona-master'][0]].ipv4_address | default(hostvars[groups['percona-master'][0]]['ansible_default_ipv4']['address']) }}"
 
 - name: Setting facts for slave
   ansible.builtin.set_fact:
-    slave_address: "{{ groups['slave'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
+    slave_address: "{{ groups['percona-slave'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
 
-- name: Ensure replication user exists on master
+- name: Ensure replication user exists on percona-master
   community.mysql.mysql_user:
     name: "{{ mysql_replication_user.name }}"
     host: "{{ item }}"
@@ -21,7 +21,7 @@
   no_log: true
   when:
     - mysql_replication_user.name is defined
-    - inventory_hostname in groups['master']
+    - inventory_hostname in groups['percona-master']
 
 - name: Check slave replication status
   community.mysql.mysql_replication:
@@ -34,17 +34,17 @@
     - "'unable to connect' in (slave_status.msg | default(''))"
   register: slave_status
   when:
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
     - mysql_replication_user.name is defined
 
-- name: Check master replication status
+- name: Check percona-master replication status
   community.mysql.mysql_replication:
     mode: getprimary
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
   register: master_status
   when:
-    - inventory_hostname in groups['master']
+    - inventory_hostname in groups['percona-master']
 
 - name: Configure replication on the slave
   community.mysql.mysql_replication:
@@ -55,8 +55,8 @@
     login_password: "{{ mysql_root_password }}"
     login_port: "{{ mysql_port }}"
     primary_password: "{{ mysql_replication_user.password }}"
-    primary_log_file: "{{ hostvars[groups['master'][0]].master_status.File }}"
-    primary_log_pos: "{{ hostvars[groups['master'][0]].master_status.Position }}"
+    primary_log_file: "{{ hostvars[groups['percona-master'][0]].master_status.File }}"
+    primary_log_pos: "{{ hostvars[groups['percona-master'][0]].master_status.Position }}"
   no_log: true
   failed_when:
     - configure_replica is failed
@@ -65,7 +65,7 @@
   when:
     - (slave_status.Is_Replica is defined and not slave_status.Is_Replica) or
       (slave_status.Is_Replica is not defined and slave_status is failed)
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
     - mysql_replication_user.name is defined
     - mysql_replication_user.password is defined
 
@@ -77,5 +77,5 @@
   when:
     - (slave_status.Is_Replica is defined and not slave_status.Is_Replica) or
       (slave_status.Is_Replica is not defined and slave_status is failed)
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
     - master_address is defined

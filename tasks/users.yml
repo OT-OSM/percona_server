@@ -15,4 +15,4 @@
   tags:
     - create_user
   when:
-    - inventory_hostname not in groups['slave']
+    - inventory_hostname not in groups['percona-slave']

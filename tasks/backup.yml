@@ -9,7 +9,7 @@
     - qpress
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 - name: Ensure backup user exists on master
   community.mysql.mysql_user:
@@ -23,7 +23,7 @@
   no_log: true
   when:
     - mysql_replication_user is defined
-    - inventory_hostname in groups['master']
+    - inventory_hostname in groups['percona-master']
 
 - name: Add the user 'backup' to the group 'mysql'
   ansible.builtin.user:
@@ -32,7 +32,7 @@
     append: true
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 - name: Copy backup scripts to /usr/local/bin
   ansible.builtin.copy:
@@ -45,7 +45,7 @@
     - prepare-mysql.sh
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 - name: Copy backup configuration file
   ansible.builtin.template:
@@ -56,7 +56,7 @@
     mode: "0600"
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 - name: Create backup directory
   ansible.builtin.file:
@@ -67,7 +67,7 @@
     mode: "0750"
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 # Check if the encryption key already exists before generating a new one.
 # Regenerating the key on every run would make all previously-encrypted backups
@@ -78,7 +78,7 @@
   register: enc_key_stat
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
 
 - name: Generate backup encryption key (only on first run)
   ansible.builtin.command: "openssl rand -base64 24"
@@ -86,7 +86,7 @@
   changed_when: true
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
     - not enc_key_stat.stat.exists
 
 - name: Write encryption key to file
@@ -98,5 +98,5 @@
     mode: "0600"
   when:
     - mysql_backup_server is defined
-    - inventory_hostname in groups['slave']
+    - inventory_hostname in groups['percona-slave']
     - not enc_key_stat.stat.exists
