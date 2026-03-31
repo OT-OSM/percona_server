@@ -1,5 +1,5 @@
 ---
-
+# updates master slave naming
 - name: Setting facts for percona-master
   ansible.builtin.set_fact:
     master_address: "{{ hostvars[groups['percona-master'][0]].ipv4_address | default(hostvars[groups['percona-master'][0]]['ansible_default_ipv4']['address']) }}"
