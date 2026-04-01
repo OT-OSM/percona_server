@@ -1,14 +1,14 @@
 ---
 # =============================================================================
 # Replication Setup
-# This file is included for BOTH master and slave plays.
-# Every task has an explicit `when` condition so it only runs on the
-# correct host — master tasks are skipped on slave and vice versa.
+# Supports both binlog-based (default/dev) and GTID-based (production) modes.
+# Controlled by mysql_gtid_mode variable in defaults/main.yml.
+# Every task has explicit `when` condition — master tasks skip on slave and
+# vice versa.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # MASTER-ONLY tasks
-# These run during the master play (inventory_hostname in percona-master)
 # -----------------------------------------------------------------------------
 
 - name: Set master address fact
@@ -48,10 +48,8 @@
 
 # -----------------------------------------------------------------------------
 # SLAVE-ONLY tasks
-# These run during the slave play (inventory_hostname in percona-slave)
-# By this point the master play has fully completed and hostvars for the
-# master host (including master_binlog_file, master_binlog_pos, master_ip)
-# are available via hostvars[groups['percona-master'][0]]
+# By this point master play has fully completed — hostvars for master
+# (master_binlog_file, master_binlog_pos, master_ip) are all available.
 # -----------------------------------------------------------------------------
 
 - name: Check current replica status
@@ -63,7 +61,8 @@
   failed_when: false
   when: inventory_hostname in groups['percona-slave']
 
-- name: Configure replica to point to master
+# Binlog-based replication (mysql_gtid_mode: false — default/dev)
+- name: Configure replica — binlog based
   community.mysql.mysql_replication:
     mode: changeprimary
     primary_host:     "{{ hostvars[groups['percona-master'][0]]['master_ip'] }}"
@@ -81,6 +80,31 @@
     - "'already' not in (configure_replica.msg | default(''))"
   when:
     - inventory_hostname in groups['percona-slave']
+    - not mysql_gtid_mode | default(false) | bool
+    - mysql_replication_user.name is defined
+    - mysql_replication_user.password is defined
+    - (slave_status.Is_Replica is not defined) or
+      (slave_status.Is_Replica is defined and not slave_status.Is_Replica)
+
+# GTID-based replication (mysql_gtid_mode: true — production)
+- name: Configure replica — GTID based
+  community.mysql.mysql_replication:
+    mode: changeprimary
+    primary_host:      "{{ hostvars[groups['percona-master'][0]]['master_ip'] }}"
+    primary_user:      "{{ mysql_replication_user.name }}"
+    primary_password:  "{{ mysql_replication_user.password }}"
+    primary_port:      "{{ mysql_port }}"
+    primary_auto_position: 1
+    login_password:    "{{ mysql_root_password }}"
+    login_port:        "{{ mysql_port }}"
+  no_log: true
+  register: configure_replica_gtid
+  failed_when:
+    - configure_replica_gtid is failed
+    - "'already' not in (configure_replica_gtid.msg | default(''))"
+  when:
+    - inventory_hostname in groups['percona-slave']
+    - mysql_gtid_mode | default(false) | bool
     - mysql_replication_user.name is defined
     - mysql_replication_user.password is defined
     - (slave_status.Is_Replica is not defined) or

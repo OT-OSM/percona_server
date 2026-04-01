@@ -131,6 +131,11 @@ mysql_binlog_format:   "ROW"
 # Use binlog_expire_logs_seconds instead (864000 = 10 days).
 mysql_binlog_expire_logs_seconds: "864000"
 
+# GTID Replication
+# Set to true for production — required for automated failover with DR tools.
+# Keep false for binlog-based replication (current dev setup).
+mysql_gtid_mode: true
+
 # Replication user — MUST override password via Ansible Vault
 mysql_replication_user:
   name: slave
