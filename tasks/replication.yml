@@ -48,9 +48,22 @@
 
 # -----------------------------------------------------------------------------
 # SLAVE-ONLY tasks
-# By this point master play has fully completed — hostvars for master
-# (master_binlog_file, master_binlog_pos, master_ip) are all available.
+# Reads master facts safely using default filter in case master play
+# did not run (e.g. --limit percona-slave).
 # -----------------------------------------------------------------------------
+
+- name: Resolve master IP from hostvars
+  ansible.builtin.set_fact:
+    resolved_master_ip: >-
+      {{ hostvars[groups['percona-master'][0]]['master_ip']
+         | default(groups['percona-master'][0]) }}
+    resolved_master_binlog_file: >-
+      {{ hostvars[groups['percona-master'][0]]['master_binlog_file']
+         | default('') }}
+    resolved_master_binlog_pos: >-
+      {{ hostvars[groups['percona-master'][0]]['master_binlog_pos']
+         | default(0) }}
+  when: inventory_hostname in groups['percona-slave']
 
 - name: Check current replica status
   community.mysql.mysql_replication:
@@ -65,12 +78,12 @@
 - name: Configure replica — binlog based
   community.mysql.mysql_replication:
     mode: changeprimary
-    primary_host:     "{{ hostvars[groups['percona-master'][0]]['master_ip'] }}"
+    primary_host:     "{{ resolved_master_ip }}"
     primary_user:     "{{ mysql_replication_user.name }}"
     primary_password: "{{ mysql_replication_user.password }}"
     primary_port:     "{{ mysql_port }}"
-    primary_log_file: "{{ hostvars[groups['percona-master'][0]]['master_binlog_file'] }}"
-    primary_log_pos:  "{{ hostvars[groups['percona-master'][0]]['master_binlog_pos'] }}"
+    primary_log_file: "{{ resolved_master_binlog_file }}"
+    primary_log_pos:  "{{ resolved_master_binlog_pos }}"
     login_password:   "{{ mysql_root_password }}"
     login_port:       "{{ mysql_port }}"
   no_log: true
@@ -90,13 +103,13 @@
 - name: Configure replica — GTID based
   community.mysql.mysql_replication:
     mode: changeprimary
-    primary_host:      "{{ hostvars[groups['percona-master'][0]]['master_ip'] }}"
-    primary_user:      "{{ mysql_replication_user.name }}"
-    primary_password:  "{{ mysql_replication_user.password }}"
-    primary_port:      "{{ mysql_port }}"
+    primary_host:          "{{ resolved_master_ip }}"
+    primary_user:          "{{ mysql_replication_user.name }}"
+    primary_password:      "{{ mysql_replication_user.password }}"
+    primary_port:          "{{ mysql_port }}"
     primary_auto_position: 1
-    login_password:    "{{ mysql_root_password }}"
-    login_port:        "{{ mysql_port }}"
+    login_password:        "{{ mysql_root_password }}"
+    login_port:            "{{ mysql_port }}"
   no_log: true
   register: configure_replica_gtid
   failed_when:
