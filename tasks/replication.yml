@@ -68,8 +68,7 @@
 - name: Check current replica status
   community.mysql.mysql_replication:
     mode: getreplica
-    login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
+    login_unix_socket: "{{ mysql_socket }}"
   register: slave_status
   failed_when: false
   when: inventory_hostname in groups['percona-slave']
@@ -84,8 +83,7 @@
     primary_port:     "{{ mysql_port }}"
     primary_log_file: "{{ resolved_master_binlog_file }}"
     primary_log_pos:  "{{ resolved_master_binlog_pos }}"
-    login_password:   "{{ mysql_root_password }}"
-    login_port:       "{{ mysql_port }}"
+    login_unix_socket: "{{ mysql_socket }}"
   no_log: true
   register: configure_replica
   failed_when:
@@ -108,9 +106,8 @@
     primary_password:      "{{ mysql_replication_user.password }}"
     primary_port:          "{{ mysql_port }}"
     primary_auto_position: 1
-    login_password:        "{{ mysql_root_password }}"
-    login_port:            "{{ mysql_port }}"
-  no_log: false
+    login_unix_socket:     "{{ mysql_socket }}"
+  no_log: true
   register: configure_replica_gtid
   failed_when:
     - configure_replica_gtid is failed
@@ -126,8 +123,7 @@
 - name: Start replica
   community.mysql.mysql_replication:
     mode: startreplica
-    login_password: "{{ mysql_root_password }}"
-    login_port:     "{{ mysql_port }}"
+    login_unix_socket: "{{ mysql_socket }}"
   when:
     - inventory_hostname in groups['percona-slave']
     - (slave_status.Is_Replica is not defined) or
