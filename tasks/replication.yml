@@ -110,7 +110,7 @@
     primary_auto_position: 1
     login_password:        "{{ mysql_root_password }}"
     login_port:            "{{ mysql_port }}"
-  no_log: true
+  no_log: false
   register: configure_replica_gtid
   failed_when:
     - configure_replica_gtid is failed
