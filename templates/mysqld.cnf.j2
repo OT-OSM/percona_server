@@ -23,15 +23,10 @@ log-raw = OFF
 local-infile = 0
 skip-symbolic-links = YES
 
-# validate_password: loaded as a COMPONENT in Percona/MySQL 8.0+
-# (the old plugin-load = validate_password.so was removed in 8.0.26)
-# Component is installed via SQL on first run — see secure-installation tasks.
-# Policy is enforced via system variables below once the component is loaded.
-validate_password.policy         = STRONG
-validate_password.special_char_count = 1
-validate_password.number_count   = 1
-validate_password.mixed_case_count = 1
-validate_password.length         = 14
+# validate_password is installed as a COMPONENT via secure-installation tasks.
+# Component system variables (validate_password.policy etc.) cannot be set
+# in my.cnf — they must be set at runtime after the component is loaded.
+# See tasks/secure-installation.yml for the INSTALL COMPONENT task.
 
 # Logging configuration.
 {% if mysql_log_error == 'syslog' or mysql_log == 'syslog' %}
@@ -86,8 +81,15 @@ binlog_ignore_db = {{ db.name }}
 # -------------------------------------------------------
 read_only             = ON
 super_read_only       = ON
-relay-log       = relay-bin
-relay-log-index = relay-bin.index
+relay-log             = relay-bin
+relay-log-index       = relay-bin.index
+
+{% if mysql_gtid_mode | default(false) %}
+# GTID Replication — enabled for production/DR
+gtid_mode                  = ON
+enforce_gtid_consistency   = ON
+log_replica_updates        = ON
+{% endif %}
 {% endif %}
 
 # User is ignored when systemd manages the process.
