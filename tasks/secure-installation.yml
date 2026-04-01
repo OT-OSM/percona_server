@@ -14,7 +14,8 @@
 
 # Install validate_password as a COMPONENT (not plugin).
 # In Percona/MySQL 8.0.26+ the old plugin-load=validate_password.so was removed.
-# The component is idempotent — safe to run even if already installed.
+# Only runs on master — slave replicates the component automatically.
+# Also skipped if super_read_only is ON (slave).
 - name: Install validate_password component
   community.mysql.mysql_query:
     query: "INSTALL COMPONENT 'file://component_validate_password'"
@@ -24,7 +25,9 @@
     - vp_install.failed is defined
     - vp_install.failed
     - "'already exists' not in (vp_install.msg | default(''))"
-  when: mysql_socket_check.rc == 0
+  when:
+    - mysql_socket_check.rc == 0
+    - inventory_hostname in groups['percona-master']
 
 - name: Disallow root login remotely
   community.mysql.mysql_user:
