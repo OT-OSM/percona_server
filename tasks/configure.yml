@@ -1,18 +1,74 @@
 ---
 - name: Get MySQL version
-  ansible.builtin.command: 'mysql --version'
+  ansible.builtin.command: "mysql --version"
   register: mysql_cli_version
   changed_when: false
   check_mode: false
 
+# 🔥 Remove ALL conflicting configs (IMPORTANT)
+- name: Remove mysql.conf.d directory (avoid overrides)
+  ansible.builtin.file:
+    path: /etc/mysql/mysql.conf.d
+    state: absent
+
+- name: Remove conf.d directory (avoid overrides)
+  ansible.builtin.file:
+    path: /etc/mysql/conf.d
+    state: absent
+
+# 🔥 Recreate clean directories (optional but safe)
+- name: Recreate mysql config directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/mysql/mysql.conf.d
+    - /etc/mysql/conf.d
+
+# 🔥 Apply our config
 - name: Copy percona global configuration file
   ansible.builtin.template:
     src: mysqld.cnf.j2
-    dest: "{{ mysql_config_file }}"
+    dest: /etc/mysql/my.cnf
     owner: root
     group: root
     mode: "0644"
-  notify: restart_percona
+
+# 🔥 HARD restart (important)
+- name: Force restart MySQL
+  ansible.builtin.shell: |
+    systemctl daemon-reexec
+    systemctl restart {{ mysql_daemon }}
+
+# 🔥 Wait until MySQL is ready
+- name: Wait for MySQL to be ready
+  ansible.builtin.wait_for:
+    port: 3306
+    delay: 5
+    timeout: 30
+
+# 🔥 Verify GTID BEFORE moving forward
+- name: Verify GTID is enabled
+  community.mysql.mysql_query:
+    query: "SHOW VARIABLES LIKE 'gtid_mode';"
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+  register: gtid_check
+
+- name: Debug GTID value
+  ansible.builtin.debug:
+    msg: "GTID mode is {{ gtid_check.query_result[0][0].Value }}"
+
+- name: Fail if GTID is not enabled
+  ansible.builtin.fail:
+    msg: "GTID is still OFF! MySQL config not applied properly."
+  when: gtid_check.query_result[0][0].Value != "ON"
+
+# ===============================
+# Remaining setup
+# ===============================
 
 - name: Create slow query log file
   ansible.builtin.file:

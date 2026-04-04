@@ -16,9 +16,8 @@
     name: "{{ mysql_backup_user.name }}"
     host: "localhost"
     password: "{{ mysql_backup_user.password }}"
-    login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
-    priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
+    login_unix_socket: "{{ mysql_login_unix_socket }}"
+    priv: "*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT"
     state: present
   no_log: true
   when:
@@ -34,11 +33,11 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Copy backup scripts to /usr/local/bin
+- name: Copy backup scripts
   ansible.builtin.copy:
     src: "{{ item }}"
     dest: /usr/local/bin/
-    mode: '0755'
+    mode: "0755"
   loop:
     - backup-mysql.sh
     - extract-mysql.sh
@@ -69,10 +68,7 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-# Check if the encryption key already exists before generating a new one.
-# Regenerating the key on every run would make all previously-encrypted backups
-# undecryptable, causing silent, catastrophic data-loss scenarios.
-- name: Check if backup encryption key already exists
+- name: Check if backup encryption key exists
   ansible.builtin.stat:
     path: "{{ mysql_backup_directory }}/encryption_key"
   register: enc_key_stat
@@ -80,7 +76,7 @@
     - mysql_backup_server is defined
     - inventory_hostname in groups['slave']
 
-- name: Generate backup encryption key (only on first run)
+- name: Generate backup encryption key
   ansible.builtin.command: "openssl rand -base64 24"
   register: encryption_key
   changed_when: true

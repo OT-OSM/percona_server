@@ -57,6 +57,9 @@ log-bin-index = mysql-bin.index
 expire_logs_days = {{ mysql_expire_logs_days }}
 max_binlog_size = {{ mysql_max_binlog_size }}
 binlog_format = {{ mysql_binlog_format }}
+gtid_mode=ON
+enforce_gtid_consistency=ON
+log_slave_updates=ON
 
 {% for db in mysql_databases %}
 {% if db.replicate | default(1) %}
@@ -69,6 +72,9 @@ binlog_ignore_db = {{ db.name }}
 {% elif inventory_hostname in groups['slave'] | default([]) %}
 # Replication - Replica (Slave)
 server-id = {{ mysql_server_id }}
+gtid_mode=ON
+enforce_gtid_consistency=ON
+log_slave_updates=ON
 read_only
 relay-log = relay-bin
 relay-log-index = relay-bin.index
