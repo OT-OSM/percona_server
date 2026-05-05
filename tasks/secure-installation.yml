@@ -38,6 +38,7 @@
     query: "INSTALL COMPONENT 'file://component_validate_password'"
     login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
+    ignore_errors: true
   when:
     - mysql_login_check.rc == 0
     - inventory_hostname in groups['percona-master']
