@@ -14,7 +14,7 @@
     login_user:        "{{ mysql_root_username }}"
     login_password:    "{{ mysql_root_password }}"
     state: present
-  no_log: true
+  no_log: false
   when: inventory_hostname in groups[ha_master_group]
 
 - name: Grant privileges to orchestrator topology user
