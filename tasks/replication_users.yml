@@ -1,28 +1,28 @@
 ---
 # =============================================================================
 # Replication and Orchestrator Users Setup
-# Runs on master only — grants replicate to slaves automatically via binlog
+# Runs on master only — uses existing mysql_root_password from percona role
 # =============================================================================
 
-- name: Create replication user on master
+- name: Create HA replication user on master
   community.mysql.mysql_user:
     name:              "{{ ha_replication_user.name }}"
     host:              "%"
     password:          "{{ ha_replication_user.password }}"
     priv:              "{{ ha_replication_user.priv }}"
-    login_unix_socket: "{{ ha_mysql_socket }}"
+    login_unix_socket: "{{ mysql_socket }}"
     login_user:        "{{ mysql_root_username }}"
     login_password:    "{{ mysql_root_password }}"
     state: present
   no_log: true
   when: inventory_hostname in groups[ha_master_group]
 
-- name: Grant required privileges to orchestrator topology user
+- name: Grant privileges to orchestrator topology user
   community.mysql.mysql_user:
     name:              "{{ ha_orchestrator_topology_user.name }}"
     host:              "%"
     password:          "{{ ha_orchestrator_topology_user.password }}"
-    priv:              >-
+    priv: >-
       *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,
       RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
       sys.*:SELECT/
@@ -30,7 +30,7 @@
       performance_schema.replication_applier_status_by_worker:SELECT/
       performance_schema.replication_group_members:SELECT/
       performance_schema.replication_group_member_stats:SELECT
-    login_unix_socket: "{{ ha_mysql_socket }}"
+    login_unix_socket: "{{ mysql_socket }}"
     login_user:        "{{ mysql_root_username }}"
     login_password:    "{{ mysql_root_password }}"
     append_privs:      true
@@ -41,7 +41,7 @@
 - name: Create orchestrator backend database
   community.mysql.mysql_db:
     name:              "{{ ha_orchestrator_backend_user.database }}"
-    login_unix_socket: "{{ ha_mysql_socket }}"
+    login_unix_socket: "{{ mysql_socket }}"
     login_user:        "{{ mysql_root_username }}"
     login_password:    "{{ mysql_root_password }}"
     state: present
@@ -53,7 +53,7 @@
     host:              "127.0.0.1"
     password:          "{{ ha_orchestrator_backend_user.password }}"
     priv:              "{{ ha_orchestrator_backend_user.database }}.*:ALL"
-    login_unix_socket: "{{ ha_mysql_socket }}"
+    login_unix_socket: "{{ mysql_socket }}"
     login_user:        "{{ mysql_root_username }}"
     login_password:    "{{ mysql_root_password }}"
     state: present
