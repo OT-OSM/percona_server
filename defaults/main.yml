@@ -10,13 +10,13 @@
 # These live in defaults (not vars/) so they can be overridden from inventory,
 # group_vars, or Semaphore extra-vars without needing --extra-vars hacks.
 # -----------------------------------------------------------------------------
-replication:              false
-backup:                   false
-database_creation:        true
-users_creation:           true
-mysql_metrics_enabled:    true
+replication:                false
+backup:                     false
+database_creation:          true
+users_creation:             true
+mysql_metrics_enabled:      true
 mysql_root_password_update: false
-mysql_install_packages:   true
+mysql_install_packages:     true
 
 # -----------------------------------------------------------------------------
 # MySQL Connection & General
@@ -55,21 +55,21 @@ mysql_join_buffer_size:         "262144"
 # -----------------------------------------------------------------------------
 # Other Settings
 # -----------------------------------------------------------------------------
-mysql_lower_case_table_names:   "0"
-mysql_wait_timeout:             "28800"
-mysql_event_scheduler_state:    "OFF"
+mysql_lower_case_table_names: "0"
+mysql_wait_timeout:           "28800"
+mysql_event_scheduler_state:  "OFF"
 
 # -----------------------------------------------------------------------------
 # InnoDB Settings
 # -----------------------------------------------------------------------------
-mysql_innodb_file_per_table:            "1"
+mysql_innodb_file_per_table:          "1"
 # Tune innodb_buffer_pool_size to ~70% of available RAM in production.
-mysql_innodb_buffer_pool_size:          "256M"
+mysql_innodb_buffer_pool_size:        "256M"
 # innodb_log_file_size should be ~25% of buffer pool size.
-mysql_innodb_log_file_size:             "64M"
-mysql_innodb_log_buffer_size:           "8M"
-mysql_innodb_flush_log_at_trx_commit:   "1"
-mysql_innodb_lock_wait_timeout:         "50"
+mysql_innodb_log_file_size:           "64M"
+mysql_innodb_log_buffer_size:         "8M"
+mysql_innodb_flush_log_at_trx_commit: "1"
+mysql_innodb_lock_wait_timeout:       "50"
 
 # innodb_large_prefix and innodb_file_format are intentionally omitted —
 # both were removed in MySQL 8.0.
@@ -124,9 +124,9 @@ mysql_root_password: "N0Tweak$_@123!"
 # Replication Settings
 # mysql_server_id MUST be unique per host — set in inventory as host_var.
 # -----------------------------------------------------------------------------
-mysql_server_id:      "1"
-mysql_max_binlog_size: "100M"
-mysql_binlog_format:   "ROW"
+mysql_server_id:                  "1"
+mysql_max_binlog_size:            "100M"
+mysql_binlog_format:              "ROW"
 # expire_logs_days was removed in MySQL 8.0.26.
 # Use binlog_expire_logs_seconds instead (864000 = 10 days).
 mysql_binlog_expire_logs_seconds: "864000"
@@ -138,12 +138,12 @@ mysql_gtid_mode: true
 
 # Replication user — MUST override password via Ansible Vault
 mysql_replication_user:
-  name: slave
+  name:     "slave"
   password: "slaveMaster@123!"
 
 # Backup user — MUST override password via Ansible Vault
 mysql_backup_user:
-  name: backup
+  name:     "backup"
   password: "backUpMaster@123!"
 
 # -----------------------------------------------------------------------------
@@ -152,49 +152,53 @@ mysql_backup_user:
 mysql_exporter_version:     "0.15.1"
 mysql_exporter_user:        mysqld_exporter
 mysql_exporter_port:        9104
-# DB user/password the exporter connects with (rendered into exporter.cnf.j2)
 mysql_exporter_db_user:     mysqld_exporter
 # MUST override via Ansible Vault
 mysql_exporter_db_password: "Exporter@123!"
 
 # =============================================================================
-# Percona Orchestrator HA Role — Default Variables
+# MySQL HA Role — Orchestrator / ProxySQL / MinIO Variables
 # Override these in group_vars / host_vars / Semaphore Variable Group.
 # Secrets (passwords) MUST be overridden via Ansible Vault / Key Store.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Feature Toggles
-# These live in defaults so they can be overridden from playbook vars,
-# group_vars, or Semaphore extra-vars without needing --extra-vars hacks.
+# HA Feature Toggles
+# Set per play in playbook.yml — do not change defaults here.
 # -----------------------------------------------------------------------------
-orchestrator_install:           false
-orchestrator_configure:         false
-proxysql_install:               false
-proxysql_configure:             false
-minio_install:                  false
-minio_configure:                false
-deploy_failover_script:         false
-deploy_backup_scripts:          false
-setup_backup_cron:              false
-configure_replication_users:    false
+orchestrator_install:        false
+orchestrator_configure:      false
+proxysql_install:            false
+proxysql_configure:          false
+minio_install:               false
+minio_configure:             false
+deploy_failover_script:      false
+deploy_backup_scripts:       false
+setup_backup_cron:           false
+configure_replication_users: false
 
 # -----------------------------------------------------------------------------
 # Inventory Group Names
-# Match exactly with proxmox VM tags
+# Must match exactly with Proxmox VM tags used in proxmox.py inventory
 # -----------------------------------------------------------------------------
-ha_master_group:        "percona-master"
-ha_slave_group:         "percona-slave"
-ha_orchestrator_group:  "orchestrator"
+ha_master_group:       "percona-master"
+ha_slave_group:        "percona-slave"
+ha_orchestrator_group: "percona-orchestrator"
 
 # -----------------------------------------------------------------------------
-# MySQL Connection
+# MySQL Connection — reuses existing percona role variables
+# ha_mysql_port   → uses mysql_port
+# ha_mysql_socket → uses mysql_socket (from vars/main.yml)
+# ha_mysql_root   → uses mysql_root_username + mysql_root_password
 # -----------------------------------------------------------------------------
-ha_mysql_port:          3306
-ha_mysql_socket:        /var/run/mysqld/mysqld.sock
+ha_mysql_port:   "{{ mysql_port }}"
+ha_mysql_socket: "{{ mysql_socket }}"
 
 # -----------------------------------------------------------------------------
-# Replication User — MUST override password via Ansible Vault
+# HA Replication User
+# Used by orchestrator and post-failover script for CHANGE MASTER TO
+# Different from mysql_replication_user (used by percona replication tasks)
+# MUST override password via Ansible Vault
 # -----------------------------------------------------------------------------
 ha_replication_user:
   name:     "repl"
@@ -202,7 +206,8 @@ ha_replication_user:
   priv:     "*.*:REPLICATION SLAVE"
 
 # -----------------------------------------------------------------------------
-# Orchestrator Topology User — MUST override password via Ansible Vault
+# Orchestrator Topology Monitoring User
+# MUST override password via Ansible Vault
 # -----------------------------------------------------------------------------
 ha_orchestrator_topology_user:
   name:     "orchestrator"
@@ -252,9 +257,10 @@ ha_orchestrator_fail_master_if_sql_not_uptodate:     false
 ha_orchestrator_detach_lost_replicas_after_failover: true
 
 # Orchestrator hostname resolution
+# Empty string — uses IP addresses directly in LDC environment
 ha_orchestrator_hostname_resolve_method:       "none"
-ha_orchestrator_mysql_hostname_resolve_method: "@@report_host"
-ha_orchestrator_reject_hostname_pattern:       "^ip-"
+ha_orchestrator_mysql_hostname_resolve_method: "none"
+ha_orchestrator_reject_hostname_pattern:       ""
 
 # -----------------------------------------------------------------------------
 # ProxySQL Settings
@@ -342,54 +348,53 @@ ha_proxysql_query_rules:
 # -----------------------------------------------------------------------------
 # MinIO Settings
 # -----------------------------------------------------------------------------
-ha_minio_install_path:   "/usr/local/bin/minio"
-ha_minio_datadir:        "/data/minio"
-ha_minio_port:           9000
-ha_minio_console_port:   9001
-ha_minio_system_user:    "minio-user"
+ha_minio_install_path: "/usr/local/bin/minio"
+ha_minio_datadir:      "/data/minio"
+ha_minio_port:         9000
+ha_minio_console_port: 9001
+ha_minio_system_user:  "minio-user"
 
 # MinIO credentials — MUST override via Ansible Vault
 ha_minio_root_user:     "minioadmin"
 ha_minio_root_password: "opstreeadmin@2510"
 
 # MinIO client (mc)
-ha_mc_install_path:  "/usr/local/bin/mc"
-ha_minio_alias:      "companyminio"
-# Override with actual MinIO endpoint
-ha_minio_endpoint:   "http://localhost:9000"
-ha_minio_bucket:     "percona-backup"
+ha_mc_install_path: "/usr/local/bin/mc"
+ha_minio_alias:     "companyminio"
+# Override with actual MinIO endpoint in Semaphore Variable Group
+ha_minio_endpoint:  "https://minio.ldc.opstree.dev:8443"
+ha_minio_bucket:    "percona-backup"
 
 # MinIO bucket folders
-ha_minio_full_folder:      "full"
-ha_minio_inc_folder:       "incremental"
-ha_minio_resync_folder:    "failover-resync"
+ha_minio_full_folder:   "full"
+ha_minio_inc_folder:    "incremental"
+ha_minio_resync_folder: "failover-resync"
 
 # -----------------------------------------------------------------------------
 # Backup Settings
 # -----------------------------------------------------------------------------
-ha_backup_log_file:            "/var/log/mysql-backup.log"
-ha_backup_lsn_file:            "/var/lib/mysql-backup/last_lsn"
-ha_backup_scripts_path:        "/usr/local/bin"
-ha_xtrabackup_parallel:        4
+ha_backup_log_file:             "/var/log/mysql-backup.log"
+ha_backup_lsn_file:             "/var/lib/mysql-backup/last_lsn"
+ha_backup_scripts_path:         "/usr/local/bin"
+ha_xtrabackup_parallel:         4
 ha_xtrabackup_compress_threads: 4
 
 # Backup cron schedule
-ha_backup_full_cron_minute:    "0"
-ha_backup_full_cron_hour:      "1"
-ha_backup_full_cron_weekday:   "0"
-ha_backup_inc_cron_minute:     "0"
-ha_backup_inc_cron_hour:       "1"
-ha_backup_inc_cron_weekday:    "1-6"
+ha_backup_full_cron_minute:  "0"
+ha_backup_full_cron_hour:    "1"
+ha_backup_full_cron_weekday: "0"
+ha_backup_inc_cron_minute:   "0"
+ha_backup_inc_cron_hour:     "1"
+ha_backup_inc_cron_weekday:  "1-6"
 
 # -----------------------------------------------------------------------------
 # Post-Failover Script Settings
 # No SSH required — uses MySQL client only (LDC environment)
 # -----------------------------------------------------------------------------
-ha_failover_script_path:          "/usr/local/orchestrator/post-failover-action.sh"
-ha_failover_max_restart_wait:     900
-ha_failover_max_restart_attempts: 3
-ha_failover_retry_interval:       30
+ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
+ha_failover_max_restart_wait: 900
+ha_failover_retry_interval:   30
 
-# Notification — set to enable alerts
+# Notification — set to enable alerts in Semaphore Variable Group
 ha_slack_webhook_url: ""
 ha_alert_email:       ""
