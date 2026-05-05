@@ -156,3 +156,240 @@ mysql_exporter_port:        9104
 mysql_exporter_db_user:     mysqld_exporter
 # MUST override via Ansible Vault
 mysql_exporter_db_password: "Exporter@123!"
+
+# =============================================================================
+# Percona Orchestrator HA Role — Default Variables
+# Override these in group_vars / host_vars / Semaphore Variable Group.
+# Secrets (passwords) MUST be overridden via Ansible Vault / Key Store.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Feature Toggles
+# These live in defaults so they can be overridden from playbook vars,
+# group_vars, or Semaphore extra-vars without needing --extra-vars hacks.
+# -----------------------------------------------------------------------------
+orchestrator_install:           false
+orchestrator_configure:         false
+proxysql_install:               false
+proxysql_configure:             false
+minio_install:                  false
+minio_configure:                false
+deploy_failover_script:         false
+deploy_backup_scripts:          false
+setup_backup_cron:              false
+configure_replication_users:    false
+
+# -----------------------------------------------------------------------------
+# Inventory Group Names
+# Match exactly with proxmox VM tags
+# -----------------------------------------------------------------------------
+ha_master_group:        "percona-master"
+ha_slave_group:         "percona-slave"
+ha_orchestrator_group:  "orchestrator"
+
+# -----------------------------------------------------------------------------
+# MySQL Connection
+# -----------------------------------------------------------------------------
+ha_mysql_port:          3306
+ha_mysql_socket:        /var/run/mysqld/mysqld.sock
+
+# -----------------------------------------------------------------------------
+# Replication User — MUST override password via Ansible Vault
+# -----------------------------------------------------------------------------
+ha_replication_user:
+  name:     "repl"
+  password: "Repl@1234"
+  priv:     "*.*:REPLICATION SLAVE"
+
+# -----------------------------------------------------------------------------
+# Orchestrator Topology User — MUST override password via Ansible Vault
+# -----------------------------------------------------------------------------
+ha_orchestrator_topology_user:
+  name:     "orchestrator"
+  password: "Orch@123"
+
+# Orchestrator backend DB user — MUST override via Ansible Vault
+ha_orchestrator_backend_user:
+  name:     "orchestrator_srv"
+  password: "OrcSrv@123"
+  database: "orchestrator"
+
+# Application ProxySQL user — MUST override password via Ansible Vault
+ha_app_user:
+  name:                   "appuser"
+  password:               "AppUser@1234"
+  host:                   "%"
+  default_hostgroup:      10
+  transaction_persistent: 1
+  max_connections:        100
+  active:                 1
+
+# -----------------------------------------------------------------------------
+# Orchestrator Settings
+# -----------------------------------------------------------------------------
+ha_orchestrator_version:      "3.2.6"
+ha_orchestrator_port:         3000
+ha_orchestrator_install_path: "/usr/local/orchestrator"
+ha_orchestrator_config_file:  "/etc/orchestrator.conf.json"
+ha_orchestrator_log_file:     "/usr/local/orchestrator/failover.log"
+ha_orchestrator_alert_log:    "/usr/local/orchestrator/alerts.log"
+ha_orchestrator_debug:        false
+
+# Orchestrator polling & detection
+ha_orchestrator_instance_poll_seconds:              5
+ha_orchestrator_recovery_poll_seconds:              2
+ha_orchestrator_detection_sampling_size:            5
+ha_orchestrator_connect_timeout_seconds:            5
+ha_orchestrator_read_timeout_seconds:               30
+ha_orchestrator_reasonable_replication_lag_seconds: 10
+ha_orchestrator_max_replicas_to_render:             5
+
+# Orchestrator recovery settings
+ha_orchestrator_recovery_enabled:                    true
+ha_orchestrator_recover_master_filters:              ["*"]
+ha_orchestrator_recover_intermediate_master_filters: ["*"]
+ha_orchestrator_fail_master_if_sql_not_uptodate:     false
+ha_orchestrator_detach_lost_replicas_after_failover: true
+
+# Orchestrator hostname resolution
+ha_orchestrator_hostname_resolve_method:       "none"
+ha_orchestrator_mysql_hostname_resolve_method: "@@report_host"
+ha_orchestrator_reject_hostname_pattern:       "^ip-"
+
+# -----------------------------------------------------------------------------
+# ProxySQL Settings
+# -----------------------------------------------------------------------------
+ha_proxysql_version:        "2.5.5"
+ha_proxysql_port:           6033
+ha_proxysql_admin_port:     6032
+ha_proxysql_admin_user:     "admin"
+# MUST override via Ansible Vault
+ha_proxysql_admin_password: "admin"
+ha_proxysql_datadir:        "/var/lib/proxysql"
+
+# ProxySQL hostgroups
+ha_proxysql_writer_hostgroup: 10
+ha_proxysql_reader_hostgroup: 20
+
+# ProxySQL connection limits
+ha_proxysql_master_max_connections: 200
+ha_proxysql_slave_max_connections:  100
+ha_proxysql_max_replication_lag:    10
+
+# ProxySQL query rules — production level
+ha_proxysql_query_rules:
+  - rule_id: 1
+    active: 1
+    match_pattern: "^SELECT.*FOR UPDATE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Locking reads to master"
+  - rule_id: 2
+    active: 1
+    match_pattern: "^SELECT.*LOCK IN SHARE MODE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Lock share mode to master"
+  - rule_id: 3
+    active: 1
+    match_pattern: "^SELECT.*INTO"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SELECT INTO to master"
+  - rule_id: 4
+    active: 1
+    match_pattern: "^SELECT"
+    destination_hostgroup: "{{ ha_proxysql_reader_hostgroup }}"
+    apply: 1
+    comment: "Regular reads to replicas"
+  - rule_id: 5
+    active: 1
+    match_pattern: "^SHOW"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SHOW commands to master"
+  - rule_id: 6
+    active: 1
+    match_pattern: "^SET"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SET commands to master"
+  - rule_id: 7
+    active: 1
+    match_pattern: "^BEGIN"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Transactions to master"
+  - rule_id: 8
+    active: 1
+    match_pattern: "^COMMIT"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Commit to master"
+  - rule_id: 9
+    active: 1
+    match_pattern: "^ROLLBACK"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Rollback to master"
+  - rule_id: 10
+    active: 1
+    match_pattern: "^CALL"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Stored procedures to master"
+
+# -----------------------------------------------------------------------------
+# MinIO Settings
+# -----------------------------------------------------------------------------
+ha_minio_install_path:   "/usr/local/bin/minio"
+ha_minio_datadir:        "/data/minio"
+ha_minio_port:           9000
+ha_minio_console_port:   9001
+ha_minio_system_user:    "minio-user"
+
+# MinIO credentials — MUST override via Ansible Vault
+ha_minio_root_user:     "minioadmin"
+ha_minio_root_password: "opstreeadmin@2510"
+
+# MinIO client (mc)
+ha_mc_install_path:  "/usr/local/bin/mc"
+ha_minio_alias:      "companyminio"
+# Override with actual MinIO endpoint
+ha_minio_endpoint:   "http://localhost:9000"
+ha_minio_bucket:     "percona-backup"
+
+# MinIO bucket folders
+ha_minio_full_folder:      "full"
+ha_minio_inc_folder:       "incremental"
+ha_minio_resync_folder:    "failover-resync"
+
+# -----------------------------------------------------------------------------
+# Backup Settings
+# -----------------------------------------------------------------------------
+ha_backup_log_file:            "/var/log/mysql-backup.log"
+ha_backup_lsn_file:            "/var/lib/mysql-backup/last_lsn"
+ha_backup_scripts_path:        "/usr/local/bin"
+ha_xtrabackup_parallel:        4
+ha_xtrabackup_compress_threads: 4
+
+# Backup cron schedule
+ha_backup_full_cron_minute:    "0"
+ha_backup_full_cron_hour:      "1"
+ha_backup_full_cron_weekday:   "0"
+ha_backup_inc_cron_minute:     "0"
+ha_backup_inc_cron_hour:       "1"
+ha_backup_inc_cron_weekday:    "1-6"
+
+# -----------------------------------------------------------------------------
+# Post-Failover Script Settings
+# No SSH required — uses MySQL client only (LDC environment)
+# -----------------------------------------------------------------------------
+ha_failover_script_path:          "/usr/local/orchestrator/post-failover-action.sh"
+ha_failover_max_restart_wait:     900
+ha_failover_max_restart_attempts: 3
+ha_failover_retry_interval:       30
+
+# Notification — set to enable alerts
+ha_slack_webhook_url: ""
+ha_alert_email:       ""

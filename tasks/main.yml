@@ -46,3 +46,71 @@
   tags:
     - mysql_metrics
   when: mysql_metrics_enabled | default(true)
+# ################################## #
+# Orchestrator Installation          #
+# ################################## #
+- name: Including tasks for Orchestrator Installation
+  ansible.builtin.include_tasks: orchestrator.yml
+  when: orchestrator_install | default(false)
+
+# ################################## #
+# Orchestrator Configuration         #
+# ################################## #
+- name: Including tasks for Orchestrator Configuration
+  ansible.builtin.include_tasks: orchestrator_configure.yml
+  when: orchestrator_configure | default(false)
+
+# ################################## #
+# ProxySQL Installation              #
+# ################################## #
+- name: Including tasks for ProxySQL Installation
+  ansible.builtin.include_tasks: proxysql.yml
+  when: proxysql_install | default(false)
+
+# ################################## #
+# ProxySQL Configuration             #
+# ################################## #
+- name: Including tasks for ProxySQL Configuration
+  ansible.builtin.include_tasks: proxysql_configure.yml
+  when: proxysql_configure | default(false)
+
+# ################################## #
+# MinIO Installation                 #
+# ################################## #
+- name: Including tasks for MinIO Installation
+  ansible.builtin.include_tasks: minio.yml
+  when: minio_install | default(false)
+
+# ################################## #
+# MinIO Configuration                #
+# ################################## #
+- name: Including tasks for MinIO Configuration
+  ansible.builtin.include_tasks: minio_configure.yml
+  when: minio_configure | default(false)
+
+# ################################## #
+# Replication Users Setup            #
+# ################################## #
+- name: Including tasks for Replication Users Setup
+  ansible.builtin.include_tasks: replication_users.yml
+  tags:
+    - replication_users
+  when: configure_replication_users | default(false)
+
+# ################################## #
+# Post-Failover Script Deployment    #
+# ################################## #
+- name: Including tasks for Post-Failover Script
+  ansible.builtin.include_tasks: post_failover_script.yml
+  tags:
+    - failover_script
+  when: deploy_failover_script | default(false)
+
+# ################################## #
+# Backup Scripts Deployment          #
+# ################################## #
+- name: Including tasks for Backup Scripts
+  ansible.builtin.include_tasks: backup_scripts.yml
+  tags:
+    - backup_scripts
+  when: deploy_backup_scripts | default(false)

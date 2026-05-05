@@ -1,0 +1,76 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# mysql-incremental-backup.sh
+# Incremental xtrabackup → stream → MinIO
+# Run from slave node — does not impact master
+#
+
+ORC_USER="{{ ha_orchestrator_topology_user.name }}"
+ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
+MINIO_ALIAS="{{ ha_minio_alias }}"
+MINIO_BUCKET="{{ ha_minio_bucket }}"
+MINIO_INC_FOLDER="{{ ha_minio_inc_folder }}"
+DAY=$(date +%A | tr '[:upper:]' '[:lower:]')
+BACKUP_NAME="inc_${DAY}_$(date +%Y%m%d_%H%M%S)"
+LOG="{{ ha_backup_log_file }}"
+LSN_FILE="{{ ha_backup_lsn_file }}"
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG
+}
+
+log "INFO" "================================================"
+log "INFO" "Starting incremental backup: $BACKUP_NAME"
+log "INFO" "================================================"
+
+# Check LSN file exists
+if [ ! -f "$LSN_FILE" ]; then
+  log "ERROR" "No LSN file found at $LSN_FILE"
+  log "ACTION" "Run full backup first: mysql-full-backup.sh"
+  exit 1
+fi
+
+LSN=$(cat $LSN_FILE)
+log "INFO" "Using base LSN: $LSN"
+
+# Configure mc for root
+mc alias set $MINIO_ALIAS \
+  {{ ha_minio_endpoint }} \
+  {{ ha_minio_root_user }} \
+  {{ ha_minio_root_password }} > /dev/null 2>&1
+
+# Stream incremental backup to MinIO
+log "INFO" "Streaming to MinIO: $MINIO_BUCKET/$MINIO_INC_FOLDER/$BACKUP_NAME.xbstream.gz"
+
+xtrabackup \
+  --backup \
+  --user=$ORC_USER \
+  --password=$ORC_PASS \
+  --stream=xbstream \
+  --parallel={{ ha_xtrabackup_parallel }} \
+  --compress \
+  --compress-threads={{ ha_xtrabackup_compress_threads }} \
+  --incremental-lsn=$LSN \
+  2>/tmp/xtrabackup_inc.log \
+| mc pipe \
+  $MINIO_ALIAS/$MINIO_BUCKET/$MINIO_INC_FOLDER/$BACKUP_NAME.xbstream.gz
+
+BACKUP_EXIT=${PIPESTATUS[0]}
+UPLOAD_EXIT=${PIPESTATUS[1]}
+
+if [ $BACKUP_EXIT -ne 0 ] || [ $UPLOAD_EXIT -ne 0 ]; then
+  log "ERROR" "Incremental backup failed! xtrabackup=$BACKUP_EXIT upload=$UPLOAD_EXIT"
+  log "ERROR" "$(tail -5 /tmp/xtrabackup_inc.log)"
+  exit 1
+fi
+
+# Update LSN for next incremental
+NEW_LSN=$(grep "The latest check point" /tmp/xtrabackup_inc.log \
+  | awk '{print $NF}' | tr -d "'")
+echo $NEW_LSN > $LSN_FILE
+
+log "INFO" "New LSN saved: $NEW_LSN"
+log "INFO" "================================================"
+log "INFO" "Incremental backup complete: $BACKUP_NAME"
+log "INFO" "================================================"

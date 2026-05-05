@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# MinIO Installation
+# =============================================================================
+
+- name: Create MinIO system user
+  ansible.builtin.user:
+    name: "{{ ha_minio_system_user }}"
+    system: true
+    shell: /sbin/nologin
+    state: present
+
+- name: Create MinIO data directory
+  ansible.builtin.file:
+    path: "{{ ha_minio_datadir }}"
+    state: directory
+    owner: "{{ ha_minio_system_user }}"
+    group: "{{ ha_minio_system_user }}"
+    mode: "0755"
+
+- name: Check if MinIO binary already exists
+  ansible.builtin.stat:
+    path: "{{ ha_minio_install_path }}"
+  register: minio_binary_stat
+
+- name: Download MinIO binary
+  ansible.builtin.get_url:
+    url: "{{ minio_download_url }}"
+    dest: "{{ ha_minio_install_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+  when: not minio_binary_stat.stat.exists
+
+- name: Deploy MinIO systemd service file
+  ansible.builtin.template:
+    src: minio.service.j2
+    dest: "{{ minio_service_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload_systemd
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start MinIO service
+  ansible.builtin.service:
+    name: "{{ minio_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for MinIO to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ ha_minio_port }}"
+    timeout: 30

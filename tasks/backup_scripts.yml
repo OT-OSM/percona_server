@@ -1,0 +1,68 @@
+---
+# =============================================================================
+# Backup Scripts Deployment
+# Runs on slave nodes — backup taken from replica, not master
+# =============================================================================
+
+- name: Install percona-xtrabackup packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    update_cache: true
+    state: present
+  loop: "{{ xtrabackup_packages }}"
+
+- name: Create backup metadata directory
+  ansible.builtin.file:
+    path: "{{ ha_backup_lsn_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create backup log file
+  ansible.builtin.file:
+    path: "{{ ha_backup_log_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0640"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Deploy full backup script
+  ansible.builtin.template:
+    src: mysql-full-backup.sh.j2
+    dest: "{{ ha_backup_scripts_path }}/mysql-full-backup.sh"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy incremental backup script
+  ansible.builtin.template:
+    src: mysql-incremental-backup.sh.j2
+    dest: "{{ ha_backup_scripts_path }}/mysql-incremental-backup.sh"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Setup full backup cron job
+  ansible.builtin.cron:
+    name:    "MySQL full backup — weekly"
+    minute:  "{{ ha_backup_full_cron_minute }}"
+    hour:    "{{ ha_backup_full_cron_hour }}"
+    weekday: "{{ ha_backup_full_cron_weekday }}"
+    job:     "{{ ha_backup_scripts_path }}/mysql-full-backup.sh >> {{ ha_backup_log_file }} 2>&1"
+    user:    root
+    state:   present
+  when: setup_backup_cron | default(false)
+
+- name: Setup incremental backup cron job
+  ansible.builtin.cron:
+    name:    "MySQL incremental backup — daily"
+    minute:  "{{ ha_backup_inc_cron_minute }}"
+    hour:    "{{ ha_backup_inc_cron_hour }}"
+    weekday: "{{ ha_backup_inc_cron_weekday }}"
+    job:     "{{ ha_backup_scripts_path }}/mysql-incremental-backup.sh >> {{ ha_backup_log_file }} 2>&1"
+    user:    root
+    state:   present
+  when: setup_backup_cron | default(false)

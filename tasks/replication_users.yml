@@ -1,0 +1,53 @@
+---
+# =============================================================================
+# Replication and Orchestrator Users Setup
+# Runs on master only — grants replicate to slaves automatically via binlog
+# =============================================================================
+
+- name: Create replication user on master
+  community.mysql.mysql_user:
+    name:           "{{ ha_replication_user.name }}"
+    host:           "%"
+    password:       "{{ ha_replication_user.password }}"
+    priv:           "{{ ha_replication_user.priv }}"
+    login_unix_socket: "{{ ha_mysql_socket }}"
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Grant required privileges to orchestrator topology user
+  community.mysql.mysql_user:
+    name:     "{{ ha_orchestrator_topology_user.name }}"
+    host:     "%"
+    password: "{{ ha_orchestrator_topology_user.password }}"
+    priv: >-
+      *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,
+      RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
+      sys.*:SELECT/
+      mysql.slave_master_info:SELECT/
+      performance_schema.replication_applier_status_by_worker:SELECT/
+      performance_schema.replication_group_members:SELECT/
+      performance_schema.replication_group_member_stats:SELECT
+    login_unix_socket: "{{ ha_mysql_socket }}"
+    state: present
+    append_privs: true
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Create orchestrator backend database
+  community.mysql.mysql_db:
+    name:  "{{ ha_orchestrator_backend_user.database }}"
+    state: present
+    login_unix_socket: "{{ ha_mysql_socket }}"
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Create orchestrator backend DB user
+  community.mysql.mysql_user:
+    name:     "{{ ha_orchestrator_backend_user.name }}"
+    host:     "127.0.0.1"
+    password: "{{ ha_orchestrator_backend_user.password }}"
+    priv:     "{{ ha_orchestrator_backend_user.database }}.*:ALL"
+    login_unix_socket: "{{ ha_mysql_socket }}"
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]

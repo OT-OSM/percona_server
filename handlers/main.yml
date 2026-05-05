@@ -10,3 +10,29 @@
   ansible.builtin.systemd:
     daemon_reload: true
   listen: Reload systemd
+  
+- name: Restart orchestrator
+  ansible.builtin.service:
+    name: "{{ orchestrator_service_name }}"
+    state: restarted
+    enabled: true
+  listen: restart_orchestrator
+
+- name: Restart proxysql
+  ansible.builtin.service:
+    name: "{{ proxysql_service_name }}"
+    state: restarted
+    enabled: true
+  listen: restart_proxysql
+
+- name: Restart minio
+  ansible.builtin.service:
+    name: "{{ minio_service_name }}"
+    state: restarted
+    enabled: true
+  listen: restart_minio
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: reload_systemd

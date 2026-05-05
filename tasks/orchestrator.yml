@@ -1,0 +1,88 @@
+---
+# =============================================================================
+# Orchestrator Installation
+# =============================================================================
+
+- name: Create orchestrator install directory
+  ansible.builtin.file:
+    path: "{{ ha_orchestrator_install_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check if orchestrator binary already exists
+  ansible.builtin.stat:
+    path: "{{ orchestrator_binary }}"
+  register: orchestrator_binary_stat
+
+- name: Download orchestrator archive
+  ansible.builtin.get_url:
+    url: "{{ orchestrator_download_url }}"
+    dest: "{{ orchestrator_tmp_archive }}"
+    mode: "0644"
+  when: not orchestrator_binary_stat.stat.exists
+
+- name: Extract orchestrator archive
+  ansible.builtin.unarchive:
+    src: "{{ orchestrator_tmp_archive }}"
+    dest: "{{ ha_orchestrator_install_path }}"
+    remote_src: true
+    extra_opts: ['--strip-components=1']
+  when: not orchestrator_binary_stat.stat.exists
+
+- name: Create orchestrator log file
+  ansible.builtin.file:
+    path: "{{ ha_orchestrator_log_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0666"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Create orchestrator alert log file
+  ansible.builtin.file:
+    path: "{{ ha_orchestrator_alert_log }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0666"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Deploy orchestrator systemd service file
+  ansible.builtin.copy:
+    dest: "{{ orchestrator_service_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=orchestrator: MySQL replication management and visualization
+      Documentation=https://github.com/openark/orchestrator
+      After=network.target
+
+      [Service]
+      ExecStart={{ ha_orchestrator_install_path }}/orchestrator http
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: reload_systemd
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start orchestrator service
+  ansible.builtin.service:
+    name: "{{ orchestrator_service_name }}"
+    state: started
+    enabled: true
+
+- name: Wait for orchestrator API to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ ha_orchestrator_port }}"
+    timeout: 30
