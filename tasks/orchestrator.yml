@@ -30,7 +30,7 @@
     src:        "{{ orchestrator_tmp_archive }}"
     dest:       "{{ ha_orchestrator_install_path }}"
     remote_src: true
-    extra_opts: ['--strip-components=3']
+    extra_opts: ['--strip-components=4']
   when: not orchestrator_binary_stat.stat.exists
 
 - name: Ensure orchestrator binary is executable
