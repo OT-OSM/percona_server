@@ -1,6 +1,8 @@
 ---
 # =============================================================================
 # Orchestrator Installation
+# Archive structure: ./usr/local/orchestrator/orchestrator
+# Strip 3 components to extract directly to install path
 # =============================================================================
 
 - name: Create orchestrator install directory
@@ -28,8 +30,15 @@
     src:        "{{ orchestrator_tmp_archive }}"
     dest:       "{{ ha_orchestrator_install_path }}"
     remote_src: true
-    extra_opts: ['--strip-components=1']
+    extra_opts: ['--strip-components=3']
   when: not orchestrator_binary_stat.stat.exists
+
+- name: Ensure orchestrator binary is executable
+  ansible.builtin.file:
+    path:  "{{ orchestrator_binary }}"
+    mode:  "0755"
+    owner: root
+    group: root
 
 - name: Create orchestrator log file
   ansible.builtin.file:
@@ -61,7 +70,7 @@
       [Unit]
       Description=orchestrator: MySQL replication management and visualization
       Documentation=https://github.com/openark/orchestrator
-      After=network.target mysql.service
+      After=network.target
 
       [Service]
       ExecStart={{ ha_orchestrator_install_path }}/orchestrator http
