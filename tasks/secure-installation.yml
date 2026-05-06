@@ -68,6 +68,7 @@
   no_log: true
   when:
     - mysql_login_check.rc == 0
+    - inventory_hostname not in groups[ha_slave_group]
 
 - name: Ensure root password is set
   ansible.builtin.command:
@@ -84,6 +85,11 @@
         BY '{{ mysql_root_password }}';
   with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
   no_log: true
+  changed_when: true
+  when:
+    - mysql_login_check.rc == 0
+    - mysql_install_packages | bool or mysql_root_password_update
+    - inventory_hostname not in groups[ha_slave_group]
   changed_when: true
   when:
     - mysql_login_check.rc == 0
