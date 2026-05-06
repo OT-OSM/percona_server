@@ -70,17 +70,21 @@
     - mysql_login_check.rc == 0
 
 - name: Ensure root password is set
-  ansible.builtin.shell: >
-    mysql
-    -u {{ mysql_root_username }}
-    -p{{ mysql_root_password }}
-    --connect-timeout=10
-    -NBe
-    'ALTER USER "{{ mysql_root_username }}"@"{{ item }}"
-    IDENTIFIED WITH caching_sha2_password
-    BY "{{ mysql_root_password }}";'
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - -u
+      - "{{ mysql_root_username }}"
+      - "-p{{ mysql_root_password }}"
+      - --connect-timeout=10
+      - -NBe
+      - >-
+        ALTER USER '{{ mysql_root_username }}'@'{{ item }}'
+        IDENTIFIED WITH caching_sha2_password
+        BY '{{ mysql_root_password }}';
   with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
   no_log: true
+  changed_when: true
   when:
     - mysql_login_check.rc == 0
     - mysql_install_packages | bool or mysql_root_password_update
