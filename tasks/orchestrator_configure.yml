@@ -1,6 +1,7 @@
 ---
 # =============================================================================
 # Orchestrator Configuration
+# Config deployed first, then service started
 # =============================================================================
 
 - name: Deploy orchestrator configuration file
@@ -10,23 +11,27 @@
     owner: root
     group: root
     mode:  "0640"
-  notify: restart_orchestrator
 
-- name: Flush handlers to restart orchestrator
-  ansible.builtin.meta: flush_handlers
+- name: Enable and start orchestrator service
+  ansible.builtin.service:
+    name:    "{{ orchestrator_service_name }}"
+    state:   started
+    enabled: true
 
-- name: Wait for orchestrator API after restart
+- name: Restart orchestrator to apply config
+  ansible.builtin.service:
+    name:  "{{ orchestrator_service_name }}"
+    state: restarted
+
+- name: Wait for orchestrator API to be ready
   ansible.builtin.wait_for:
     host:    127.0.0.1
     port:    "{{ ha_orchestrator_port }}"
-    timeout: 30
+    timeout: 60
 
 - name: Discover master node in orchestrator
   ansible.builtin.uri:
-    url: >-
-      http://localhost:{{ ha_orchestrator_port }}/api/discover/{{
-      hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address']
-      }}/{{ mysql_port }}
+    url: "http://localhost:{{ ha_orchestrator_port }}/api/discover/{{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}/{{ mysql_port }}"
     method:      GET
     status_code: 200
   register: orchestrator_discover
