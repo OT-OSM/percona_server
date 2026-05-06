@@ -1,11 +1,11 @@
 ---
 galaxy_info:
   author: Rajnish Sharma
-  description: Install and configure Orchestrator, ProxySQL and MinIO for MySQL HA
+  description: Install and configure Percona Server with HA using Orchestrator, ProxySQL and MinIO
   company: Opstree Solutions
   license: GPLv3
   min_ansible_version: "2.12"
-  role_name: percona_orchestrator
+  role_name: percona_server
   namespace: opstree_devops
 
   platforms:
@@ -23,6 +23,8 @@ galaxy_info:
     - proxysql
     - minio
     - ha
+    - cisbenchmark
+    - database
     - devops
 
 dependencies: []
