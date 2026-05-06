@@ -17,31 +17,6 @@
   failed_when: false
   no_log: true
 
-- name: Check if validate_password component already installed
-  community.mysql.mysql_query:
-    query: >
-      SELECT COUNT(*) as cnt FROM mysql.component
-      WHERE component_urn = 'file://component_validate_password'
-    login_user:     "{{ mysql_root_username }}"
-    login_password: "{{ mysql_root_password }}"
-  register: vp_check
-  failed_when: false
-  when:
-    - mysql_login_check.rc == 0
-    - inventory_hostname in groups[ha_master_group]
-
-- name: Install validate_password component
-  community.mysql.mysql_query:
-    query: "INSTALL COMPONENT 'file://component_validate_password'"
-    login_user:     "{{ mysql_root_username }}"
-    login_password: "{{ mysql_root_password }}"
-  ignore_errors: true
-  when:
-    - mysql_login_check.rc == 0
-    - inventory_hostname in groups[ha_master_group]
-    - vp_check is not skipped
-    - vp_check.query_result[0][0]['cnt'] | int == 0
-
 - name: Disallow root login remotely
   community.mysql.mysql_user:
     name:           "{{ mysql_root_username }}"
