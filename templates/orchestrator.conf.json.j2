@@ -7,13 +7,13 @@
   "MySQLTopologyPassword": "{{ ha_orchestrator_topology_user.password }}",
 
   "MySQLOrchestratorHost":     "127.0.0.1",
-  "MySQLOrchestratorPort":     {{ ha_mysql_port }},
+  "MySQLOrchestratorPort":     {{ mysql_port }},
   "MySQLOrchestratorDatabase": "{{ ha_orchestrator_backend_user.database }}",
   "MySQLOrchestratorUser":     "{{ ha_orchestrator_backend_user.name }}",
   "MySQLOrchestratorPassword": "{{ ha_orchestrator_backend_user.password }}",
 
-  "HostnameResolveMethod":      "{{ ha_orchestrator_hostname_resolve_method }}",
-  "MySQLHostnameResolveMethod": "{{ ha_orchestrator_mysql_hostname_resolve_method }}",
+  "HostnameResolveMethod":        "{{ ha_orchestrator_hostname_resolve_method }}",
+  "MySQLHostnameResolveMethod":   "{{ ha_orchestrator_mysql_hostname_resolve_method }}",
   "RejectHostnameResolvePattern": "{{ ha_orchestrator_reject_hostname_pattern }}",
 
   "InstancePollSeconds":             {{ ha_orchestrator_instance_poll_seconds }},
