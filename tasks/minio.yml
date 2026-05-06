@@ -2,6 +2,7 @@
 # =============================================================================
 # MinIO Client (mc) Configuration
 # Installs mc and configures alias pointing to company MinIO
+# Uses --insecure for self-signed SSL certificate
 # =============================================================================
 
 - name: Check if mc client already exists
@@ -20,31 +21,35 @@
 
 - name: Configure mc alias for company MinIO
   ansible.builtin.command: >
-    mc alias set {{ ha_minio_alias }}
+    {{ ha_mc_install_path }} alias set {{ ha_minio_alias }}
     {{ ha_minio_endpoint }}
     {{ ha_minio_root_user }}
     {{ ha_minio_root_password }}
+    --insecure
   changed_when: false
   no_log: true
 
 - name: Verify MinIO connection and bucket exists
   ansible.builtin.command: >
-    mc ls {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+    {{ ha_mc_install_path }} ls {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+    --insecure
   changed_when: false
   register: minio_bucket_check
   failed_when: false
 
 - name: Create MinIO backup bucket if not exists
   ansible.builtin.command: >
-    mc mb --ignore-existing
+    {{ ha_mc_install_path }} mb --ignore-existing
     {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+    --insecure
   changed_when: false
   when: minio_bucket_check.rc != 0
 
 - name: Create MinIO bucket folder structure
   ansible.builtin.command: >
-    mc mb --ignore-existing
+    {{ ha_mc_install_path }} mb --ignore-existing
     {{ ha_minio_alias }}/{{ ha_minio_bucket }}/{{ item }}
+    --insecure
   loop:
     - "{{ ha_minio_full_folder }}"
     - "{{ ha_minio_inc_folder }}"
