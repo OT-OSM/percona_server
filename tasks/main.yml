@@ -88,7 +88,7 @@
 # HA — MinIO Client Configuration    #
 # ################################## #
 - name: Including tasks for MinIO Client Configuration
-  ansible.builtin.include_tasks: minio_configure.yml
+  ansible.builtin.include_tasks: minio.yml
   when: minio_configure | default(false)
 
 # ################################## #
