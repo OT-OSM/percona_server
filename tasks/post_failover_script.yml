@@ -6,11 +6,11 @@
 
 - name: Deploy post-failover action script
   ansible.builtin.template:
-    src: post-failover-action.sh.j2
-    dest: "{{ ha_failover_script_path }}"
+    src:   post-failover-action.sh.j2
+    dest:  "{{ ha_failover_script_path }}"
     owner: root
     group: root
-    mode: "0755"
+    mode:  "0755"
 
 - name: Validate post-failover script syntax
   ansible.builtin.command: >
