@@ -1,8 +1,6 @@
 ---
 # =============================================================================
-# Percona Server Role — Internal Role Constants
-# These are role internals, NOT meant to be overridden by users.
-# User-facing toggles and tuning variables belong in defaults/main.yml.
+# Internal Role Constants — NOT meant to be overridden
 # =============================================================================
 
 version: "8.0"
@@ -12,48 +10,42 @@ percona_packages:
   - python3-pip
   - "percona-server-server"
 
-mysql_daemon:             mysql
-mysql_config_file:        /etc/mysql/my.cnf
+mysql_daemon:          mysql
+mysql_config_file:     /etc/mysql/my.cnf
 mysql_slow_query_log_file: /var/log/mysql/mysql-slow.log
-mysql_socket:             /var/run/mysqld/mysqld.sock
-mysql_pid_file:           /var/run/mysqld/mysqld.pid
-mysql_log_error:          /var/log/mysql/mysql.err
-mysql_root_username:      root
+mysql_socket:          /var/run/mysqld/mysqld.sock
+mysql_pid_file:        /var/run/mysqld/mysqld.pid
+mysql_log_error:       /var/log/mysql/mysql.err
+mysql_root_username:   root
+mysql_install_packages: true
 
-# replication and backup have been moved to defaults/main.yml so they can be
-# overridden from inventory, group_vars, or Semaphore extra-vars.
-# DO NOT re-add them here — vars/ takes higher precedence and would
-# silently ignore any override attempt.
+replication: false
+backup:      false
 
 mysql_backup_config_file: /etc/mysql/backup.cnf
 mysql_backup_directory:   /backups/mysql
 
-# =============================================================================
-# Percona Orchestrator HA Role — Internal Role Constants
-# These are role internals, NOT meant to be overridden by users.
-# User-facing toggles and tuning variables belong in defaults/main.yml.
-# =============================================================================
+database_creation: true
+users_creation:    true
 
-# Orchestrator
-orchestrator_binary:        "{{ ha_orchestrator_install_path }}/orchestrator"
-orchestrator_service_name:  "orchestrator"
-orchestrator_service_file:  "/etc/systemd/system/orchestrator.service"
-orchestrator_download_url:  "https://github.com/openark/orchestrator/releases/download/v{{ ha_orchestrator_version }}/orchestrator-{{ ha_orchestrator_version }}-linux-amd64.tar.gz"
-orchestrator_tmp_archive:   "/tmp/orchestrator-{{ ha_orchestrator_version }}.tar.gz"
+# Orchestrator internal constants
+orchestrator_binary:      "{{ ha_orchestrator_install_path }}/orchestrator"
+orchestrator_service_name: "orchestrator"
+orchestrator_service_file: "/etc/systemd/system/orchestrator.service"
+orchestrator_download_url: >-
+  https://github.com/openark/orchestrator/releases/download/
+  v{{ ha_orchestrator_version }}/orchestrator-{{ ha_orchestrator_version }}-linux-amd64.tar.gz
+orchestrator_tmp_archive: "/tmp/orchestrator-{{ ha_orchestrator_version }}.tar.gz"
 
-# ProxySQL
-proxysql_service_name:      "proxysql"
-proxysql_pid_file:          "{{ ha_proxysql_datadir }}/proxysql.pid"
-proxysql_download_url:      "https://github.com/sysown/proxysql/releases/download/v{{ ha_proxysql_version }}/proxysql_{{ ha_proxysql_version }}-ubuntu20_amd64.deb"
-proxysql_tmp_package:       "/tmp/proxysql_{{ ha_proxysql_version }}.deb"
+# ProxySQL internal constants
+proxysql_service_name: "proxysql"
+proxysql_pid_file:     "{{ ha_proxysql_datadir }}/proxysql.pid"
+proxysql_download_url: >-
+  https://github.com/sysown/proxysql/releases/download/
+  v{{ ha_proxysql_version }}/proxysql_{{ ha_proxysql_version }}-ubuntu20_amd64.deb
+proxysql_tmp_package: "/tmp/proxysql_{{ ha_proxysql_version }}.deb"
 
-# MinIO
-minio_service_name:         "minio"
-minio_service_file:         "/etc/systemd/system/minio.service"
-minio_download_url:         "https://dl.min.io/server/minio/release/linux-amd64/minio"
-mc_download_url:            "https://dl.min.io/client/mc/release/linux-amd64/mc"
-
-# XtraBackup
+# XtraBackup packages
 xtrabackup_packages:
   - percona-xtrabackup-80
   - qpress
