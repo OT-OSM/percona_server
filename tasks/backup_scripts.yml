@@ -4,12 +4,31 @@
 # xtrabackup streams directly to MinIO — no local disk usage
 # =============================================================================
 
-- name: Install percona-xtrabackup packages
+- name: Install percona-xtrabackup-80
   ansible.builtin.apt:
-    name:         "{{ item }}"
+    name:         "percona-xtrabackup-80"
     update_cache: true
     state:        present
-  loop: "{{ xtrabackup_packages }}"
+
+- name: Install qpress from apt
+  ansible.builtin.apt:
+    name:  "qpress"
+    state: present
+  register: qpress_apt
+  failed_when: false
+
+- name: Download qpress deb if apt failed
+  ansible.builtin.get_url:
+    url:  "https://repo.percona.com/apt/pool/main/q/qpress/qpress_11-3.{{ ansible_lsb.codename }}_amd64.deb"
+    dest: "/tmp/qpress.deb"
+    mode: "0644"
+  when: qpress_apt.failed | default(false)
+
+- name: Install qpress from deb if apt failed
+  ansible.builtin.apt:
+    deb:   "/tmp/qpress.deb"
+    state: present
+  when: qpress_apt.failed | default(false)
 
 - name: Check if mc client already exists on slave
   ansible.builtin.stat:
@@ -27,10 +46,11 @@
 
 - name: Configure mc alias on slave
   ansible.builtin.command: >
-    mc alias set {{ ha_minio_alias }}
+    {{ ha_mc_install_path }} alias set {{ ha_minio_alias }}
     {{ ha_minio_endpoint }}
     {{ ha_minio_root_user }}
     {{ ha_minio_root_password }}
+    --insecure
   changed_when: false
   no_log: true
 
