@@ -3,6 +3,7 @@
 # MinIO Client (mc) Configuration
 # Installs mc and configures alias pointing to company MinIO
 # Uses --insecure for self-signed SSL certificate
+# S3 API port: 9000 (console port 8443 is web UI only)
 # =============================================================================
 
 - name: Check if mc client already exists
@@ -29,21 +30,12 @@
   changed_when: false
   no_log: true
 
-- name: Verify MinIO connection and bucket exists
+- name: Verify MinIO connection
   ansible.builtin.command: >
-    {{ ha_mc_install_path }} ls {{ ha_minio_alias }}/{{ ha_minio_bucket }}
-    --insecure
+    {{ ha_mc_install_path }} ls {{ ha_minio_alias }}/ --insecure
   changed_when: false
-  register: minio_bucket_check
-  failed_when: false
-
-- name: Create MinIO backup bucket if not exists
-  ansible.builtin.command: >
-    {{ ha_mc_install_path }} mb --ignore-existing
-    {{ ha_minio_alias }}/{{ ha_minio_bucket }}
-    --insecure
-  changed_when: false
-  when: minio_bucket_check.rc != 0
+  register: minio_check
+  failed_when: minio_check.rc != 0
 
 - name: Create MinIO bucket folder structure
   ansible.builtin.command: >
