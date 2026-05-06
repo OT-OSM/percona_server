@@ -19,86 +19,80 @@
 # ############################# #
 - name: Including tasks to Replication Setup
   ansible.builtin.include_tasks: replication.yml
-  when: replication
+  when: replication | default(false)
 
 # ################################### #
 # Percona Backup Server Configuration #
 # ################################### #
 - name: Including tasks to Backup Server Setup
   ansible.builtin.include_tasks: backup.yml
-  when: backup
+  when: backup | default(false)
 
 # ############################# #
 # Percona User and DB Operation #
 # ############################# #
 - name: Including tasks to database creation
   ansible.builtin.include_tasks: database.yml
-  when: database_creation
+  when: database_creation | default(true)
 
 - name: Including tasks to user creation
   ansible.builtin.include_tasks: users.yml
   tags:
     - create_user
-  when: users_creation
+  when: users_creation | default(true)
 
 - name: Including tasks to exporter metrics
   ansible.builtin.include_tasks: mysql_metrics.yml
   tags:
     - mysql_metrics
   when: mysql_metrics_enabled | default(true)
-# ################################## #
-# Orchestrator Installation          #
-# ################################## #
-- name: Including tasks for Orchestrator Installation
-  ansible.builtin.include_tasks: orchestrator.yml
-  when: orchestrator_install | default(false)
 
 # ################################## #
-# Orchestrator Configuration         #
+# HA — Replication Users Setup       #
 # ################################## #
-- name: Including tasks for Orchestrator Configuration
-  ansible.builtin.include_tasks: orchestrator_configure.yml
-  when: orchestrator_configure | default(false)
-
-# ################################## #
-# ProxySQL Installation              #
-# ################################## #
-- name: Including tasks for ProxySQL Installation
-  ansible.builtin.include_tasks: proxysql.yml
-  when: proxysql_install | default(false)
-
-# ################################## #
-# ProxySQL Configuration             #
-# ################################## #
-- name: Including tasks for ProxySQL Configuration
-  ansible.builtin.include_tasks: proxysql_configure.yml
-  when: proxysql_configure | default(false)
-
-# ################################## #
-# MinIO Installation                 #
-# ################################## #
-- name: Including tasks for MinIO Installation
-  ansible.builtin.include_tasks: minio.yml
-  when: minio_install | default(false)
-
-# ################################## #
-# MinIO Configuration                #
-# ################################## #
-- name: Including tasks for MinIO Configuration
-  ansible.builtin.include_tasks: minio_configure.yml
-  when: minio_configure | default(false)
-
-# ################################## #
-# Replication Users Setup            #
-# ################################## #
-- name: Including tasks for Replication Users Setup
+- name: Including tasks for HA Replication Users Setup
   ansible.builtin.include_tasks: replication_users.yml
   tags:
     - replication_users
   when: configure_replication_users | default(false)
 
 # ################################## #
-# Post-Failover Script Deployment    #
+# HA — Orchestrator Installation     #
+# ################################## #
+- name: Including tasks for Orchestrator Installation
+  ansible.builtin.include_tasks: orchestrator.yml
+  when: orchestrator_install | default(false)
+
+# ################################## #
+# HA — Orchestrator Configuration    #
+# ################################## #
+- name: Including tasks for Orchestrator Configuration
+  ansible.builtin.include_tasks: orchestrator_configure.yml
+  when: orchestrator_configure | default(false)
+
+# ################################## #
+# HA — ProxySQL Installation         #
+# ################################## #
+- name: Including tasks for ProxySQL Installation
+  ansible.builtin.include_tasks: proxysql.yml
+  when: proxysql_install | default(false)
+
+# ################################## #
+# HA — ProxySQL Configuration        #
+# ################################## #
+- name: Including tasks for ProxySQL Configuration
+  ansible.builtin.include_tasks: proxysql_configure.yml
+  when: proxysql_configure | default(false)
+
+# ################################## #
+# HA — MinIO Client Configuration    #
+# ################################## #
+- name: Including tasks for MinIO Client Configuration
+  ansible.builtin.include_tasks: minio_configure.yml
+  when: minio_configure | default(false)
+
+# ################################## #
+# HA — Post-Failover Script          #
 # ################################## #
 - name: Including tasks for Post-Failover Script
   ansible.builtin.include_tasks: post_failover_script.yml
@@ -107,9 +101,9 @@
   when: deploy_failover_script | default(false)
 
 # ################################## #
-# Backup Scripts Deployment          #
+# HA — Backup Scripts                #
 # ################################## #
-- name: Including tasks for Backup Scripts
+- name: Including tasks for HA Backup Scripts
   ansible.builtin.include_tasks: backup_scripts.yml
   tags:
     - backup_scripts
