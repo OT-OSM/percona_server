@@ -1,47 +1,23 @@
 #!/bin/bash
 # {{ ansible_managed }}
-#
-# mysql-full-backup.sh
-# Full xtrabackup → stream → MinIO
-# Run from slave node — does not impact master
-#
+# Full xtrabackup stream to MinIO — runs from slave node
 
 ORC_USER="{{ ha_orchestrator_topology_user.name }}"
 ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
 MINIO_ALIAS="{{ ha_minio_alias }}"
 MINIO_BUCKET="{{ ha_minio_bucket }}"
-MINIO_FULL_FOLDER="{{ ha_minio_full_folder }}"
 BACKUP_NAME="full_$(date +%Y%m%d_%H%M%S)"
 LOG="{{ ha_backup_log_file }}"
 LSN_FILE="{{ ha_backup_lsn_file }}"
 
-log() {
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG
-}
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG; }
 
-log "INFO" "================================================"
 log "INFO" "Starting full backup: $BACKUP_NAME"
-log "INFO" "================================================"
 
-# Check replica lag before backup
-LAG=$(mysql -u $ORC_USER -p$ORC_PASS \
-  --connect-timeout=10 \
-  -se "SHOW SLAVE STATUS\G" 2>/dev/null \
-  | grep "Seconds_Behind_Master" | awk '{print $2}')
-
-if [ "$LAG" -gt 30 ] 2>/dev/null; then
-  log "WARN" "Replica lag ${LAG}s — waiting 60s for sync"
-  sleep 60
-fi
-
-# Configure mc for root
 mc alias set $MINIO_ALIAS \
   {{ ha_minio_endpoint }} \
   {{ ha_minio_root_user }} \
   {{ ha_minio_root_password }} > /dev/null 2>&1
-
-# Stream backup directly to MinIO
-log "INFO" "Streaming to MinIO: $MINIO_BUCKET/$MINIO_FULL_FOLDER/$BACKUP_NAME.xbstream.gz"
 
 xtrabackup \
   --backup \
@@ -52,25 +28,21 @@ xtrabackup \
   --compress \
   --compress-threads={{ ha_xtrabackup_compress_threads }} \
   2>/tmp/xtrabackup_full.log \
-| mc pipe \
-  $MINIO_ALIAS/$MINIO_BUCKET/$MINIO_FULL_FOLDER/$BACKUP_NAME.xbstream.gz
+| mc pipe $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_full_folder }}/$BACKUP_NAME.xbstream.gz
 
 BACKUP_EXIT=${PIPESTATUS[0]}
 UPLOAD_EXIT=${PIPESTATUS[1]}
 
 if [ $BACKUP_EXIT -ne 0 ] || [ $UPLOAD_EXIT -ne 0 ]; then
   log "ERROR" "Full backup failed! xtrabackup=$BACKUP_EXIT upload=$UPLOAD_EXIT"
-  log "ERROR" "$(tail -5 /tmp/xtrabackup_full.log)"
+  tail -5 /tmp/xtrabackup_full.log >> $LOG
   exit 1
 fi
 
-# Save LSN for incremental backups
 mkdir -p $(dirname $LSN_FILE)
 LSN=$(grep "The latest check point" /tmp/xtrabackup_full.log \
   | awk '{print $NF}' | tr -d "'")
 echo $LSN > $LSN_FILE
 
 log "INFO" "LSN saved: $LSN"
-log "INFO" "================================================"
 log "INFO" "Full backup complete: $BACKUP_NAME"
-log "INFO" "================================================"
