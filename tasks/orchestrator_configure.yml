@@ -29,23 +29,27 @@
     owner: root
     group: root
     mode:  "0640"
+  notify: restart_orchestrator
 
-- name: Enable and start orchestrator service
+- name: Flush handlers to apply config
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable orchestrator service
   ansible.builtin.service:
     name:    "{{ orchestrator_service_name }}"
-    state:   started
     enabled: true
 
-- name: Restart orchestrator to apply config
+- name: Ensure orchestrator service is started
   ansible.builtin.service:
     name:  "{{ orchestrator_service_name }}"
-    state: restarted
+    state: started
 
 - name: Wait for orchestrator API to be ready
   ansible.builtin.wait_for:
     host:    127.0.0.1
     port:    "{{ ha_orchestrator_port }}"
-    timeout: 60
+    timeout: 120
+    delay:   5
 
 - name: Discover master node in orchestrator
   ansible.builtin.uri:
