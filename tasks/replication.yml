@@ -1,130 +1,121 @@
 ---
 # =============================================================================
-# Replication Setup
-# Supports both binlog-based (default/dev) and GTID-based (production) modes.
-# Controlled by mysql_gtid_mode variable in defaults/main.yml.
-# Every task has explicit `when` condition — master tasks skip on slave and
-# vice versa.
+# Replication Setup — GTID based
 # =============================================================================
-
-# -----------------------------------------------------------------------------
-# MASTER-ONLY tasks
-# -----------------------------------------------------------------------------
 
 - name: Set master address fact
   ansible.builtin.set_fact:
-    master_address: "{{ inventory_hostname }}"
-  when: inventory_hostname in groups['percona-master']
+    master_address: >-
+      {{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}
+  when: inventory_hostname in groups[ha_master_group]
 
 - name: Ensure replication user exists on master
   community.mysql.mysql_user:
-    name: "{{ mysql_replication_user.name }}"
-    host: "{{ item }}"
-    password: "{{ mysql_replication_user.password }}"
+    name:           "{{ mysql_replication_user.name }}"
+    host:           "%"
+    password:       "{{ mysql_replication_user.password }}"
+    login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
-    priv: "{{ mysql_replication_user.priv | default('*.*:REPLICATION SLAVE,REPLICATION CLIENT') }}"
+    login_port:     "{{ mysql_port }}"
+    priv:           "{{ mysql_replication_user.priv | default('*.*:REPLICATION SLAVE,REPLICATION CLIENT') }}"
     state: present
-  loop: "{{ groups['percona-slave'] }}"
   no_log: true
   when:
-    - inventory_hostname in groups['percona-master']
+    - inventory_hostname in groups[ha_master_group]
     - mysql_replication_user.name is defined
 
 - name: Get master binary log status
   community.mysql.mysql_replication:
-    mode: getprimary
+    mode:           getprimary
+    login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
+    login_port:     "{{ mysql_port }}"
   register: master_status
-  when: inventory_hostname in groups['percona-master']
+  when: inventory_hostname in groups[ha_master_group]
 
 - name: Store master binlog info as persistent facts
   ansible.builtin.set_fact:
     master_binlog_file: "{{ master_status.File }}"
     master_binlog_pos:  "{{ master_status.Position }}"
-    master_ip:          "{{ inventory_hostname }}"
-  when: inventory_hostname in groups['percona-master']
-
-# -----------------------------------------------------------------------------
-# SLAVE-ONLY tasks
-# Reads master facts safely using default filter in case master play
-# did not run (e.g. --limit percona-slave).
-# -----------------------------------------------------------------------------
+    master_ip: >-
+      {{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}
+  when: inventory_hostname in groups[ha_master_group]
 
 - name: Resolve master IP from hostvars
   ansible.builtin.set_fact:
     resolved_master_ip: >-
-      {{ hostvars[groups['percona-master'][0]]['master_ip']
-         | default(groups['percona-master'][0]) }}
+      {{ hostvars[groups[ha_master_group][0]]['master_ip']
+         | default(hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address']) }}
     resolved_master_binlog_file: >-
-      {{ hostvars[groups['percona-master'][0]]['master_binlog_file']
-         | default('') }}
+      {{ hostvars[groups[ha_master_group][0]]['master_binlog_file'] | default('') }}
     resolved_master_binlog_pos: >-
-      {{ hostvars[groups['percona-master'][0]]['master_binlog_pos']
-         | default(0) }}
-  when: inventory_hostname in groups['percona-slave']
+      {{ hostvars[groups[ha_master_group][0]]['master_binlog_pos'] | default(0) }}
+  when: inventory_hostname in groups[ha_slave_group]
 
 - name: Check current replica status
   community.mysql.mysql_replication:
-    mode: getreplica
-    login_unix_socket: "{{ mysql_socket }}"
+    mode:             getreplica
+    login_user:       "{{ mysql_root_username }}"
+    login_password:   "{{ mysql_root_password }}"
+    login_port:       "{{ mysql_port }}"
   register: slave_status
   failed_when: false
-  when: inventory_hostname in groups['percona-slave']
+  when: inventory_hostname in groups[ha_slave_group]
 
-# Binlog-based replication (mysql_gtid_mode: false — default/dev)
-- name: Configure replica — binlog based
-  community.mysql.mysql_replication:
-    mode: changeprimary
-    primary_host:     "{{ resolved_master_ip }}"
-    primary_user:     "{{ mysql_replication_user.name }}"
-    primary_password: "{{ mysql_replication_user.password }}"
-    primary_port:     "{{ mysql_port }}"
-    primary_log_file: "{{ resolved_master_binlog_file }}"
-    primary_log_pos:  "{{ resolved_master_binlog_pos }}"
-    login_unix_socket: "{{ mysql_socket }}"
-  no_log: true
-  register: configure_replica
-  failed_when:
-    - configure_replica is failed
-    - "'already' not in (configure_replica.msg | default(''))"
-  when:
-    - inventory_hostname in groups['percona-slave']
-    - not mysql_gtid_mode | default(false) | bool
-    - mysql_replication_user.name is defined
-    - mysql_replication_user.password is defined
-    - (slave_status.Is_Replica is not defined) or
-      (slave_status.Is_Replica is defined and not slave_status.Is_Replica)
-
-# GTID-based replication (mysql_gtid_mode: true — production)
 - name: Configure replica — GTID based
   community.mysql.mysql_replication:
-    mode: changeprimary
+    mode:                  changeprimary
     primary_host:          "{{ resolved_master_ip }}"
     primary_user:          "{{ mysql_replication_user.name }}"
     primary_password:      "{{ mysql_replication_user.password }}"
     primary_port:          "{{ mysql_port }}"
     primary_auto_position: 1
-    login_unix_socket:     "{{ mysql_socket }}"
+    login_user:            "{{ mysql_root_username }}"
+    login_password:        "{{ mysql_root_password }}"
+    login_port:            "{{ mysql_port }}"
   no_log: true
   register: configure_replica_gtid
   failed_when:
     - configure_replica_gtid is failed
     - "'already' not in (configure_replica_gtid.msg | default(''))"
   when:
-    - inventory_hostname in groups['percona-slave']
+    - inventory_hostname in groups[ha_slave_group]
     - mysql_gtid_mode | default(false) | bool
     - mysql_replication_user.name is defined
-    - mysql_replication_user.password is defined
+    - (slave_status.Is_Replica is not defined) or
+      (slave_status.Is_Replica is defined and not slave_status.Is_Replica)
+
+- name: Configure replica — binlog based
+  community.mysql.mysql_replication:
+    mode:             changeprimary
+    primary_host:     "{{ resolved_master_ip }}"
+    primary_user:     "{{ mysql_replication_user.name }}"
+    primary_password: "{{ mysql_replication_user.password }}"
+    primary_port:     "{{ mysql_port }}"
+    primary_log_file: "{{ resolved_master_binlog_file }}"
+    primary_log_pos:  "{{ resolved_master_binlog_pos }}"
+    login_user:       "{{ mysql_root_username }}"
+    login_password:   "{{ mysql_root_password }}"
+    login_port:       "{{ mysql_port }}"
+  no_log: true
+  register: configure_replica
+  failed_when:
+    - configure_replica is failed
+    - "'already' not in (configure_replica.msg | default(''))"
+  when:
+    - inventory_hostname in groups[ha_slave_group]
+    - not mysql_gtid_mode | default(false) | bool
+    - mysql_replication_user.name is defined
     - (slave_status.Is_Replica is not defined) or
       (slave_status.Is_Replica is defined and not slave_status.Is_Replica)
 
 - name: Start replica
   community.mysql.mysql_replication:
-    mode: startreplica
-    login_unix_socket: "{{ mysql_socket }}"
+    mode:           startreplica
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    login_port:     "{{ mysql_port }}"
   when:
-    - inventory_hostname in groups['percona-slave']
+    - inventory_hostname in groups[ha_slave_group]
     - (slave_status.Is_Replica is not defined) or
       (slave_status.Is_Replica is defined and not slave_status.Is_Replica)
