@@ -73,6 +73,7 @@
       After=network.target
 
       [Service]
+      WorkingDirectory={{ ha_orchestrator_install_path }}
       ExecStart={{ ha_orchestrator_install_path }}/orchestrator http
       Restart=on-failure
       RestartSec=10
@@ -80,6 +81,5 @@
       [Install]
       WantedBy=multi-user.target
   notify: Reload systemd
-
 - name: Flush handlers to reload systemd
   ansible.builtin.meta: flush_handlers
