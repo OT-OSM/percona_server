@@ -125,29 +125,6 @@ simple_rejoin() {
   return $?
 }
 
-# Check GTID gap
-check_gtid_gap() {
-  local host=$1
-  local new_master=$2
-
-  OLD_GTID=$(mysql -u $ORC_USER -p$ORC_PASS \
-    -h $host -P $MYSQL_PORT --connect-timeout=10 \
-    -se "SELECT @@gtid_executed;" 2>/dev/null)
-
-  NEW_PURGED=$(mysql -u $ORC_USER -p$ORC_PASS \
-    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
-    -se "SELECT @@gtid_purged;" 2>/dev/null)
-
-  GAP=$(mysql -u $ORC_USER -p$ORC_PASS \
-    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
-    -se "SELECT GTID_SUBTRACT('$NEW_PURGED','$OLD_GTID');" 2>/dev/null)
-
-  log "INFO" "Old master GTID: $OLD_GTID"
-  log "INFO" "New master purged: $NEW_PURGED"
-  log "INFO" "GTID gap: '$GAP'"
-  echo "$GAP"
-}
-
 # Rejoin as slave — simple or alert for xtrabackup
 rejoin_as_slave() {
   local host=$1
@@ -167,12 +144,38 @@ rejoin_as_slave() {
     -se "SHOW SLAVE STATUS\G" 2>/dev/null \
     | grep "Slave_IO_Running" | awk '{print $2}')
 
-  if [ "$CURRENT_MASTER" = "$new_master" ] && [ "$IO_RUNNING" = "Yes" ]; then
+  if [ "$CURRENT_MASTER" = "$new_master" ] && \
+     [ "$IO_RUNNING" = "Yes" ]; then
     log "INFO" "Already replicating from $new_master — no rejoin needed"
     return 0
   fi
 
-  GAP=$(check_gtid_gap $host $new_master)
+  # Get GTID info
+  OLD_GTID=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $host -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT @@gtid_executed;" 2>/dev/null)
+
+  NEW_PURGED=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT @@gtid_purged;" 2>/dev/null)
+
+  log "INFO" "Old master GTID:  $OLD_GTID"
+  log "INFO" "New master purged: $NEW_PURGED"
+
+  # If new master has NO purged GTIDs — binlogs intact, safe to rejoin
+  if [ -z "$NEW_PURGED" ]; then
+    log "INFO" "New master has no purged GTIDs — safe to do simple rejoin"
+    simple_rejoin $host $new_master
+    return $?
+  fi
+
+  # New master has purged GTIDs — check if old master is missing any
+  GAP=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT GTID_SUBTRACT('$NEW_PURGED','$OLD_GTID');" \
+    2>/dev/null)
+
+  log "INFO" "GTID gap: '$GAP'"
 
   if [ -z "$GAP" ]; then
     log "INFO" "No GTID gap — performing simple rejoin"
@@ -180,7 +183,8 @@ rejoin_as_slave() {
     return $?
   else
     log "WARN" "GTID gap detected: $GAP"
-    log "WARN" "Binlogs purged — xtrabackup resync required"
+    log "WARN" "Binlogs purged on new master — old master missing transactions"
+    log "WARN" "xtrabackup resync required"
     log "ACTION" "Run Ansible backup-restore playbook manually"
     log "ACTION" "Source: $new_master  Target: $host"
     notify_team "GTID gap on $host — run xtrabackup restore. Source: $new_master Target: $host"
