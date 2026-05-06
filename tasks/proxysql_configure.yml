@@ -1,7 +1,7 @@
 ---
 # =============================================================================
 # ProxySQL Configuration
-# No SSH required — all via mysql client on localhost:6032
+# All via mysql client on localhost:6032 — no SSH required
 # =============================================================================
 
 - name: Configure ProxySQL replication hostgroups
@@ -14,9 +14,9 @@
     reader_hostgroup: "{{ ha_proxysql_reader_hostgroup }}"
     check_type:       "read_only"
     comment:          "MySQL HA Cluster"
-    state: present
-    load_to_runtime: true
-    save_to_disk: true
+    state:            present
+    load_to_runtime:  true
+    save_to_disk:     true
 
 - name: Configure ProxySQL backend server — master
   community.proxysql.proxysql_backend_servers:
@@ -25,13 +25,13 @@
     login_user:      "{{ ha_proxysql_admin_user }}"
     login_password:  "{{ ha_proxysql_admin_password }}"
     hostgroup_id:    "{{ ha_proxysql_writer_hostgroup }}"
-    hostname:        "{{ hostvars[groups[ha_master_group][0]]['ansible_host'] }}"
-    port:            "{{ ha_mysql_port }}"
+    hostname:        "{{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}"
+    port:            "{{ mysql_port }}"
     max_connections: "{{ ha_proxysql_master_max_connections }}"
     status:          ONLINE
-    state: present
+    state:           present
     load_to_runtime: true
-    save_to_disk: true
+    save_to_disk:    true
 
 - name: Configure ProxySQL backend servers — slaves
   community.proxysql.proxysql_backend_servers:
@@ -40,17 +40,17 @@
     login_user:          "{{ ha_proxysql_admin_user }}"
     login_password:      "{{ ha_proxysql_admin_password }}"
     hostgroup_id:        "{{ ha_proxysql_reader_hostgroup }}"
-    hostname:            "{{ hostvars[item]['ansible_host'] }}"
-    port:                "{{ ha_mysql_port }}"
+    hostname:            "{{ hostvars[item]['ansible_default_ipv4']['address'] }}"
+    port:                "{{ mysql_port }}"
     max_connections:     "{{ ha_proxysql_slave_max_connections }}"
     max_replication_lag: "{{ ha_proxysql_max_replication_lag }}"
     status:              ONLINE
-    state: present
-    load_to_runtime: true
-    save_to_disk: true
+    state:               present
+    load_to_runtime:     true
+    save_to_disk:        true
   loop: "{{ groups[ha_slave_group] }}"
 
-- name: Configure ProxySQL MySQL users
+- name: Configure ProxySQL MySQL app user
   community.proxysql.proxysql_mysql_users:
     login_host:             "127.0.0.1"
     login_port:             "{{ ha_proxysql_admin_port }}"
@@ -62,9 +62,9 @@
     active:                 "{{ ha_app_user.active | default(1) }}"
     transaction_persistent: "{{ ha_app_user.transaction_persistent | default(1) }}"
     max_connections:        "{{ ha_app_user.max_connections | default(100) }}"
-    state: present
+    state:           present
     load_to_runtime: true
-    save_to_disk: true
+    save_to_disk:    true
   no_log: true
 
 - name: Configure ProxySQL orchestrator user
@@ -79,9 +79,9 @@
     active:                 1
     transaction_persistent: 0
     max_connections:        10
-    state: present
+    state:           present
     load_to_runtime: true
-    save_to_disk: true
+    save_to_disk:    true
   no_log: true
 
 - name: Configure ProxySQL query rules
@@ -96,7 +96,7 @@
     destination_hostgroup: "{{ item.destination_hostgroup }}"
     apply:                 "{{ item.apply }}"
     comment:               "{{ item.comment | default('') }}"
-    state: present
+    state:           present
     load_to_runtime: true
-    save_to_disk: true
+    save_to_disk:    true
   loop: "{{ ha_proxysql_query_rules }}"
