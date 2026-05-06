@@ -1,57 +1,52 @@
 ---
 # =============================================================================
-# MinIO Installation
+# MinIO Client (mc) Configuration
+# Installs mc and configures alias pointing to company MinIO
 # =============================================================================
 
-- name: Create MinIO system user
-  ansible.builtin.user:
-    name: "{{ ha_minio_system_user }}"
-    system: true
-    shell: /sbin/nologin
-    state: present
-
-- name: Create MinIO data directory
-  ansible.builtin.file:
-    path: "{{ ha_minio_datadir }}"
-    state: directory
-    owner: "{{ ha_minio_system_user }}"
-    group: "{{ ha_minio_system_user }}"
-    mode: "0755"
-
-- name: Check if MinIO binary already exists
+- name: Check if mc client already exists
   ansible.builtin.stat:
-    path: "{{ ha_minio_install_path }}"
-  register: minio_binary_stat
+    path: "{{ ha_mc_install_path }}"
+  register: mc_binary_stat
 
-- name: Download MinIO binary
+- name: Download MinIO client (mc)
   ansible.builtin.get_url:
-    url: "{{ minio_download_url }}"
-    dest: "{{ ha_minio_install_path }}"
-    mode: "0755"
+    url:   "https://dl.min.io/client/mc/release/linux-amd64/mc"
+    dest:  "{{ ha_mc_install_path }}"
+    mode:  "0755"
     owner: root
     group: root
-  when: not minio_binary_stat.stat.exists
+  when: not mc_binary_stat.stat.exists
 
-- name: Deploy MinIO systemd service file
-  ansible.builtin.template:
-    src: minio.service.j2
-    dest: "{{ minio_service_file }}"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: reload_systemd
+- name: Configure mc alias for company MinIO
+  ansible.builtin.command: >
+    mc alias set {{ ha_minio_alias }}
+    {{ ha_minio_endpoint }}
+    {{ ha_minio_root_user }}
+    {{ ha_minio_root_password }}
+  changed_when: false
+  no_log: true
 
-- name: Flush handlers to reload systemd
-  ansible.builtin.meta: flush_handlers
+- name: Verify MinIO connection and bucket exists
+  ansible.builtin.command: >
+    mc ls {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+  changed_when: false
+  register: minio_bucket_check
+  failed_when: false
 
-- name: Enable and start MinIO service
-  ansible.builtin.service:
-    name: "{{ minio_service_name }}"
-    state: started
-    enabled: true
+- name: Create MinIO backup bucket if not exists
+  ansible.builtin.command: >
+    mc mb --ignore-existing
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+  changed_when: false
+  when: minio_bucket_check.rc != 0
 
-- name: Wait for MinIO to be ready
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ ha_minio_port }}"
-    timeout: 30
+- name: Create MinIO bucket folder structure
+  ansible.builtin.command: >
+    mc mb --ignore-existing
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}/{{ item }}
+  loop:
+    - "{{ ha_minio_full_folder }}"
+    - "{{ ha_minio_inc_folder }}"
+    - "{{ ha_minio_resync_folder }}"
+  changed_when: false
