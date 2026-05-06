@@ -1,9 +1,8 @@
 ---
 # =============================================================================
 # Secure Installation Tasks
-# Uses password auth — socket auth not available (caching_sha2_password)
-# Write operations skipped on slave because super_read_only = ON.
-# Slave inherits these settings via replication from master.
+# Uses password auth — caching_sha2_password (no socket auth)
+# Write operations master-only — slave inherits via replication
 # =============================================================================
 
 - name: Check MySQL login with password
@@ -18,7 +17,6 @@
   failed_when: false
   no_log: true
 
-# Master-only: Check if validate_password already installed
 - name: Check if validate_password component already installed
   community.mysql.mysql_query:
     query: >
@@ -27,24 +25,23 @@
     login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
   register: vp_check
+  failed_when: false
   when:
     - mysql_login_check.rc == 0
-    - inventory_hostname in groups['percona-master']
+    - inventory_hostname in groups[ha_master_group]
 
-# Master-only: Install validate_password component only if not present
-# Slave replicates this automatically via binlog.
 - name: Install validate_password component
   community.mysql.mysql_query:
     query: "INSTALL COMPONENT 'file://component_validate_password'"
     login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
-    ignore_errors: true
+  ignore_errors: true
   when:
     - mysql_login_check.rc == 0
-    - inventory_hostname in groups['percona-master']
-    - vp_check.query_result[0][0]['cnt'] == 0
+    - inventory_hostname in groups[ha_master_group]
+    - vp_check is not skipped
+    - vp_check.query_result[0][0]['cnt'] | int == 0
 
-# Master-only: Disallow root remote login
 - name: Disallow root login remotely
   community.mysql.mysql_user:
     name:           "{{ mysql_root_username }}"
@@ -54,9 +51,8 @@
     login_password: "{{ mysql_root_password }}"
   when:
     - mysql_login_check.rc == 0
-    - inventory_hostname in groups['percona-master']
+    - inventory_hostname in groups[ha_master_group]
 
-# Master-only: Remove anonymous users
 - name: Get list of hosts for the anonymous user
   ansible.builtin.command: >
     mysql
@@ -69,7 +65,7 @@
   no_log: true
   when:
     - mysql_login_check.rc == 0
-    - inventory_hostname in groups['percona-master']
+    - inventory_hostname in groups[ha_master_group]
 
 - name: Remove anonymous MySQL users
   community.mysql.mysql_user:
@@ -81,10 +77,8 @@
   with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
   when:
     - mysql_login_check.rc == 0
-    - inventory_hostname in groups['percona-master']
+    - inventory_hostname in groups[ha_master_group]
 
-# Root password set on all nodes individually
-# Slave cannot use ALTER USER via replication when super_read_only=ON
 - name: Get list of hosts for the root user
   ansible.builtin.command: >
     mysql
