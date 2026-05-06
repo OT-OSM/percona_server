@@ -1,4 +1,10 @@
 ---
+# =============================================================================
+# HA Replication and Orchestrator Users Setup
+# Runs on master only — grants replicate to slave automatically via binlog
+# Uses login_user + login_password (no socket auth — caching_sha2_password)
+# =============================================================================
+
 - name: Create HA replication user on master
   community.mysql.mysql_user:
     name:           "{{ ha_replication_user.name }}"
@@ -8,17 +14,16 @@
     login_user:     "{{ mysql_root_username }}"
     login_password: "{{ mysql_root_password }}"
     state: present
-  no_log: false
+  no_log: true
   when: inventory_hostname in groups[ha_master_group]
 
 - name: Grant privileges to orchestrator topology user
   community.mysql.mysql_user:
-    name:           "{{ ha_orchestrator_topology_user.name }}"
-    host:           "%"
-    password:       "{{ ha_orchestrator_topology_user.password }}"
+    name:     "{{ ha_orchestrator_topology_user.name }}"
+    host:     "%"
+    password: "{{ ha_orchestrator_topology_user.password }}"
     priv: >-
-      *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,
-      RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
+      *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
       sys.*:SELECT/
       mysql.slave_master_info:SELECT/
       performance_schema.replication_applier_status_by_worker:SELECT/
