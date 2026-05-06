@@ -2,7 +2,7 @@
 # =============================================================================
 # Orchestrator Installation
 # Archive structure: ./usr/local/orchestrator/orchestrator
-# Strip 3 components to extract directly to install path
+# Strip 4 components to extract binary directly to install path
 # =============================================================================
 
 - name: Create orchestrator install directory
