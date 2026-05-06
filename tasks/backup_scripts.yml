@@ -1,53 +1,76 @@
 ---
 # =============================================================================
-# Backup Scripts Deployment
-# Runs on slave nodes — backup taken from replica, not master
+# HA Backup Scripts — runs on slave nodes
+# xtrabackup streams directly to MinIO — no local disk usage
 # =============================================================================
 
 - name: Install percona-xtrabackup packages
   ansible.builtin.apt:
-    name: "{{ item }}"
+    name:         "{{ item }}"
     update_cache: true
-    state: present
+    state:        present
   loop: "{{ xtrabackup_packages }}"
+
+- name: Check if mc client already exists on slave
+  ansible.builtin.stat:
+    path: "{{ ha_mc_install_path }}"
+  register: mc_binary_stat_slave
+
+- name: Download MinIO client (mc) on slave
+  ansible.builtin.get_url:
+    url:   "https://dl.min.io/client/mc/release/linux-amd64/mc"
+    dest:  "{{ ha_mc_install_path }}"
+    mode:  "0755"
+    owner: root
+    group: root
+  when: not mc_binary_stat_slave.stat.exists
+
+- name: Configure mc alias on slave
+  ansible.builtin.command: >
+    mc alias set {{ ha_minio_alias }}
+    {{ ha_minio_endpoint }}
+    {{ ha_minio_root_user }}
+    {{ ha_minio_root_password }}
+  changed_when: false
+  no_log: true
 
 - name: Create backup metadata directory
   ansible.builtin.file:
-    path: "{{ ha_backup_lsn_file | dirname }}"
+    path:  "{{ ha_backup_lsn_file | dirname }}"
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode:  "0755"
 
 - name: Create backup log file
   ansible.builtin.file:
-    path: "{{ ha_backup_log_file }}"
-    state: touch
-    owner: root
-    group: root
-    mode: "0640"
+    path:              "{{ ha_backup_log_file }}"
+    state:             touch
+    owner:             root
+    group:             root
+    mode:              "0640"
     modification_time: preserve
-    access_time: preserve
+    access_time:       preserve
 
 - name: Deploy full backup script
   ansible.builtin.template:
-    src: mysql-full-backup.sh.j2
-    dest: "{{ ha_backup_scripts_path }}/mysql-full-backup.sh"
+    src:   mysql-full-backup.sh.j2
+    dest:  "{{ ha_backup_scripts_path }}/mysql-full-backup.sh"
     owner: root
     group: root
-    mode: "0755"
+    mode:  "0755"
 
 - name: Deploy incremental backup script
   ansible.builtin.template:
-    src: mysql-incremental-backup.sh.j2
-    dest: "{{ ha_backup_scripts_path }}/mysql-incremental-backup.sh"
+    src:   mysql-incremental-backup.sh.j2
+    dest:  "{{ ha_backup_scripts_path }}/mysql-incremental-backup.sh"
     owner: root
     group: root
-    mode: "0755"
+    mode:  "0755"
 
 - name: Setup full backup cron job
   ansible.builtin.cron:
-    name:    "MySQL full backup — weekly"
+    name:    "MySQL HA full backup — weekly"
     minute:  "{{ ha_backup_full_cron_minute }}"
     hour:    "{{ ha_backup_full_cron_hour }}"
     weekday: "{{ ha_backup_full_cron_weekday }}"
@@ -58,7 +81,7 @@
 
 - name: Setup incremental backup cron job
   ansible.builtin.cron:
-    name:    "MySQL incremental backup — daily"
+    name:    "MySQL HA incremental backup — daily"
     minute:  "{{ ha_backup_inc_cron_minute }}"
     hour:    "{{ ha_backup_inc_cron_hour }}"
     weekday: "{{ ha_backup_inc_cron_weekday }}"
