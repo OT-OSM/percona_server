@@ -33,8 +33,8 @@ setup_backup_cron:           false
 # -----------------------------------------------------------------------------
 # Inventory Group Names — match Proxmox VM tags exactly
 # -----------------------------------------------------------------------------
-ha_master_group:       "master"
-ha_slave_group:        "slave"
+ha_master_group:       "percona-master"
+ha_slave_group:        "percona-slave"
 ha_orchestrator_group: "percona-orchestrator"
 
 # -----------------------------------------------------------------------------
