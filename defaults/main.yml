@@ -314,7 +314,7 @@ ha_proxysql_query_rules:
 # -----------------------------------------------------------------------------
 ha_mc_install_path:     "/usr/local/bin/mc"
 ha_minio_alias:         "companyminio"
-ha_minio_endpoint:      "https://minio.ldc.opstree.dev:8443"
+ha_minio_endpoint:      "https://minio.ldc.opstree.dev:9000"
 ha_minio_root_user:     "minioadmin"
 ha_minio_root_password: "opstreeadmin@2510"
 ha_minio_bucket:        "percona-backup"
