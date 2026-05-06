@@ -1,8 +1,26 @@
 ---
 # =============================================================================
 # Orchestrator Configuration
-# Config deployed first, then service started
+# Creates backend DB/user, deploys config, then starts service
 # =============================================================================
+
+- name: Create orchestrator backend database on orchestrator host
+  community.mysql.mysql_db:
+    name:           "{{ ha_orchestrator_backend_user.database }}"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+
+- name: Create orchestrator backend DB user on orchestrator host
+  community.mysql.mysql_user:
+    name:           "{{ ha_orchestrator_backend_user.name }}"
+    host:           "localhost"
+    password:       "{{ ha_orchestrator_backend_user.password }}"
+    priv:           "{{ ha_orchestrator_backend_user.database }}.*:ALL"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+  no_log: true
 
 - name: Deploy orchestrator configuration file
   ansible.builtin.template:
