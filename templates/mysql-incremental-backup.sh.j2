@@ -6,6 +6,7 @@ ORC_USER="{{ ha_orchestrator_topology_user.name }}"
 ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
 MINIO_ALIAS="{{ ha_minio_alias }}"
 MINIO_BUCKET="{{ ha_minio_bucket }}"
+MC="{{ ha_mc_install_path }}"
 DAY=$(date +%A | tr '[:upper:]' '[:lower:]')
 BACKUP_NAME="inc_${DAY}_$(date +%Y%m%d_%H%M%S)"
 LOG="{{ ha_backup_log_file }}"
@@ -21,10 +22,11 @@ fi
 LSN=$(cat $LSN_FILE)
 log "INFO" "Starting incremental backup: $BACKUP_NAME (base LSN: $LSN)"
 
-mc alias set $MINIO_ALIAS \
+$MC alias set $MINIO_ALIAS \
   {{ ha_minio_endpoint }} \
   {{ ha_minio_root_user }} \
-  {{ ha_minio_root_password }} > /dev/null 2>&1
+  {{ ha_minio_root_password }} \
+  --insecure > /dev/null 2>&1
 
 xtrabackup \
   --backup \
@@ -36,7 +38,8 @@ xtrabackup \
   --compress-threads={{ ha_xtrabackup_compress_threads }} \
   --incremental-lsn=$LSN \
   2>/tmp/xtrabackup_inc.log \
-| mc pipe $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_inc_folder }}/$BACKUP_NAME.xbstream.gz
+| $MC pipe --insecure \
+  $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_inc_folder }}/$BACKUP_NAME.xbstream.gz
 
 BACKUP_EXIT=${PIPESTATUS[0]}
 UPLOAD_EXIT=${PIPESTATUS[1]}
