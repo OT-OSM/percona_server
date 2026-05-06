@@ -31,7 +31,10 @@
 
 - name: Discover master node in orchestrator
   ansible.builtin.uri:
-    url: "http://localhost:{{ ha_orchestrator_port }}/api/discover/{{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}/{{ mysql_port }}"
+    url: >-
+      http://localhost:{{ ha_orchestrator_port }}/api/discover/{{
+      hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address']
+      }}/{{ mysql_port }}
     method:      GET
     status_code: 200
   register: orchestrator_discover
