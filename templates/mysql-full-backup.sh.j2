@@ -36,7 +36,7 @@ xtrabackup \
 BACKUP_EXIT=${PIPESTATUS[0]}
 UPLOAD_EXIT=${PIPESTATUS[1]}
 
-if [ $BACKUP_EXIT -ne 0 ] || [ $UPLOAD_EXIT -ne 0 ]; then
+if [ "${BACKUP_EXIT:-1}" -ne 0 ] || [ "${UPLOAD_EXIT:-1}" -ne 0 ]; then
   log "ERROR" "Full backup failed! xtrabackup=$BACKUP_EXIT upload=$UPLOAD_EXIT"
   tail -5 /tmp/xtrabackup_full.log >> $LOG
   exit 1
