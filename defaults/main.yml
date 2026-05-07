@@ -210,7 +210,7 @@ ha_orchestrator_instance_poll_seconds:              5
 ha_orchestrator_recovery_poll_seconds:              2
 # Recovery block period — 0 means no blocking between recoveries
 # Increase in production to prevent cascading failovers
-ha_orchestrator_recovery_period_block_seconds: 0
+ha_orchestrator_recovery_period_block_seconds:      0
 ha_orchestrator_detection_sampling_size:            5
 ha_orchestrator_connect_timeout_seconds:            5
 ha_orchestrator_read_timeout_seconds:               30
