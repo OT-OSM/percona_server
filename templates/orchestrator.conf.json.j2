@@ -23,6 +23,7 @@
 
   "RecoveryEnabled":                         {{ ha_orchestrator_recovery_enabled | lower }},
   "RecoveryPollSeconds":                     {{ ha_orchestrator_recovery_poll_seconds }},
+  "RecoveryPeriodBlockSeconds":              {{ ha_orchestrator_recovery_period_block_seconds }},
   "DetectionSamplingSize":                   {{ ha_orchestrator_detection_sampling_size }},
   "RecoverMasterClusterFilters":             {{ ha_orchestrator_recover_master_filters | to_json }},
   "RecoverIntermediateMasterClusterFilters": {{ ha_orchestrator_recover_intermediate_master_filters | to_json }},
