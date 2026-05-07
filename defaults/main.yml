@@ -116,6 +116,4 @@ mysql_exporter_version: "0.15.1"
 mysql_exporter_user: mysqld_exporter
 mysql_exporter_port: 9104
 
-# Recovery block period — 0 means no blocking between recoveries
-# Increase in production to prevent cascading failovers
-ha_orchestrator_recovery_period_block_seconds: 0
+
