@@ -35,7 +35,7 @@ setup_backup_cron:           false
 # -----------------------------------------------------------------------------
 ha_master_group:       "percona-master"
 ha_slave_group:        "percona-slave"
-ha_orchestrator_group: "Percona-orchestrator"
+ha_orchestrator_group:  192.168.8.12
 
 # -----------------------------------------------------------------------------
 # MySQL Connection & General
