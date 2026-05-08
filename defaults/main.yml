@@ -35,7 +35,7 @@ setup_backup_cron:           false
 # -----------------------------------------------------------------------------
 ha_master_group:       "percona-master"
 ha_slave_group:        "percona-slave"
-ha_orchestrator_group:  192.168.8.12
+ha_orchestrator_group: "percona-orchestrator"
 
 # -----------------------------------------------------------------------------
 # MySQL Connection & General
@@ -346,6 +346,7 @@ ha_backup_inc_cron_weekday:  "1-6"
 # Post-Failover Script Settings
 # No SSH required — MySQL client only (LDC environment)
 # -----------------------------------------------------------------------------
+ha_failover_ssh_user: "ubuntu"
 ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
 ha_failover_max_restart_wait: 900
 ha_failover_retry_interval:   30
