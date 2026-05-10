@@ -49,3 +49,13 @@ echo $LSN > $LSN_FILE
 
 log "INFO" "LSN saved: $LSN"
 log "INFO" "Full backup complete: $BACKUP_NAME"
+
+# ── Cleanup old full backups ──────────────────────────────────────────────────
+log "INFO" "Cleaning full backups older than {{ ha_backup_full_retention_days }} days"
+$MC rm --insecure --recursive --force \
+  --older-than {{ ha_backup_full_retention_days }}d \
+  $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_full_folder }}/ >> $LOG 2>&1 || true
+
+log "INFO" "Current storage after cleanup:"
+$MC du --insecure \
+  $MINIO_ALIAS/$MINIO_BUCKET/ 2>/dev/null | tee -a $LOG
