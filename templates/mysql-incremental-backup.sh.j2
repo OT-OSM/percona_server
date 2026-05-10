@@ -56,3 +56,13 @@ echo $NEW_LSN > $LSN_FILE
 
 log "INFO" "New LSN saved: $NEW_LSN"
 log "INFO" "Incremental backup complete: $BACKUP_NAME"
+
+# ── Cleanup old incremental backups ──────────────────────────────────────────
+log "INFO" "Cleaning incremental backups older than {{ ha_backup_inc_retention_days }} days"
+$MC rm --insecure --recursive --force \
+  --older-than {{ ha_backup_inc_retention_days }}d \
+  $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_inc_folder }}/ >> $LOG 2>&1 || true
+
+log "INFO" "Current storage after cleanup:"
+$MC du --insecure \
+  $MINIO_ALIAS/$MINIO_BUCKET/ 2>/dev/null | tee -a $LOG
