@@ -38,6 +38,7 @@
   register: minio_check
   failed_when: minio_check.rc != 0
 
+# Create bucket structure only on designated MinIO node (slave)
 - name: Create MinIO bucket folder structure
   ansible.builtin.command: >
     {{ ha_mc_install_path }} mb --ignore-existing
