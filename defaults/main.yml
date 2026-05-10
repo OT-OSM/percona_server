@@ -343,6 +343,12 @@ ha_backup_inc_cron_hour:     "1"
 ha_backup_inc_cron_weekday:  "1-6"
 
 # -----------------------------------------------------------------------------
+# Backup Retention Policy
+# -----------------------------------------------------------------------------
+ha_backup_full_retention_days: 30
+ha_backup_inc_retention_days:  7
+
+# -----------------------------------------------------------------------------
 # Post-Failover Script Settings
 # No SSH required — MySQL client only (LDC environment)
 # -----------------------------------------------------------------------------
