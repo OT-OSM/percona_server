@@ -4,7 +4,7 @@
 # post-failover-action.sh
 # Called by orchestrator PostMasterFailoverProcesses
 # Uses MySQL client only — no SSH required (LDC environment)
-# For GTID gap: triggers Ansible restore playbook automatically
+# For GTID gap: alerts team to run Semaphore restore playbook
 #
 # Usage: post-failover-action.sh {failedHost} {successorHost}
 
@@ -27,6 +27,10 @@ MINIO_ALIAS="{{ ha_minio_alias }}"
 MINIO_BUCKET="{{ ha_minio_bucket }}"
 MINIO_RESYNC_FOLDER="{{ ha_minio_resync_folder }}"
 MC="{{ ha_mc_install_path }}"
+
+# Semaphore
+SEMAPHORE_URL="{{ ha_semaphore_url }}"
+SEMAPHORE_RESTORE_TEMPLATE="{{ ha_semaphore_restore_template }}"
 
 # Settings
 LOG="{{ ha_orchestrator_log_file }}"
@@ -127,178 +131,6 @@ simple_rejoin() {
   return $?
 }
 
-# ── xtrabackup resync via MinIO (no SSH needed) ───────────────────────────────
-# Uses Ansible to run xtrabackup on remote nodes
-xtrabackup_resync() {
-  local host=$1
-  local new_master=$2
-  local backup_name="resync_$(date +%Y%m%d_%H%M%S)"
-  local minio_path="$MINIO_ALIAS/$MINIO_BUCKET/$MINIO_RESYNC_FOLDER/$backup_name"
-
-  log "INFO" "================================================"
-  log "INFO" "Starting xtrabackup resync via Ansible + MinIO"
-  log "INFO" "Source (new master): $new_master"
-  log "INFO" "Target (old master): $host"
-  log "INFO" "Backup name: $backup_name"
-  log "INFO" "================================================"
-
-  # ── Step 1: Run xtrabackup on new master via Ansible ─────────────────
-  log "INFO" "Step 1: Taking xtrabackup on $new_master via Ansible"
-
-  ansible all \
-    -i "$new_master," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "xtrabackup \
-          --backup \
-          --user=$ORC_USER \
-          --password=$ORC_PASS \
-          --stream=xbstream \
-          --parallel={{ ha_xtrabackup_parallel }} \
-          --compress \
-          --compress-threads={{ ha_xtrabackup_compress_threads }} \
-          2>/tmp/xtrabackup_resync.log \
-        | $MC pipe --insecure $minio_path.xbstream.gz \
-        && echo BACKUP_SUCCESS" \
-    >> $LOG 2>&1
-
-  if ! grep -q "BACKUP_SUCCESS" $LOG; then
-    log "ERROR" "xtrabackup on $new_master failed"
-    notify_team "ERROR: xtrabackup resync failed on $new_master"
-    return 1
-  fi
-
-  log "INFO" "Backup uploaded to MinIO: $minio_path.xbstream.gz"
-
-  # ── Step 2: Download + extract on old master via Ansible ─────────────
-  log "INFO" "Step 2: Downloading backup to $host via Ansible"
-
-  ansible all \
-    -i "$host," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "$MC alias set $MINIO_ALIAS \
-          {{ ha_minio_endpoint }} \
-          {{ ha_minio_root_user }} \
-          {{ ha_minio_root_password }} \
-          --insecure > /dev/null 2>&1 && \
-        mkdir -p /tmp/xtrabackup_restore && \
-        $MC get --insecure $minio_path.xbstream.gz - \
-        | xbstream -x --decompress -C /tmp/xtrabackup_restore/ \
-        && echo DOWNLOAD_SUCCESS" \
-    >> $LOG 2>&1
-
-  if ! grep -q "DOWNLOAD_SUCCESS" $LOG; then
-    log "ERROR" "Download/extract failed on $host"
-    notify_team "ERROR: Backup download failed on $host"
-    return 1
-  fi
-
-  # ── Step 3: Prepare backup ────────────────────────────────────────────
-  log "INFO" "Step 3: Preparing backup on $host"
-
-  ansible all \
-    -i "$host," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "xtrabackup --prepare \
-          --target-dir=/tmp/xtrabackup_restore/ \
-          2>/tmp/xtrabackup_prepare.log \
-        && echo PREPARE_SUCCESS" \
-    >> $LOG 2>&1
-
-  if ! grep -q "PREPARE_SUCCESS" $LOG; then
-    log "ERROR" "xtrabackup prepare failed on $host"
-    notify_team "ERROR: xtrabackup prepare failed on $host"
-    return 1
-  fi
-
-  # ── Step 4: Stop MySQL + Restore ─────────────────────────────────────
-  log "INFO" "Step 4: Stopping MySQL and restoring on $host"
-
-  ansible all \
-    -i "$host," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "systemctl stop mysql && \
-        rm -rf /var/lib/mysql/* && \
-        xtrabackup --copy-back \
-          --target-dir=/tmp/xtrabackup_restore/ && \
-        chown -R mysql:mysql /var/lib/mysql/ && \
-        echo RESTORE_SUCCESS" \
-    >> $LOG 2>&1
-
-  if ! grep -q "RESTORE_SUCCESS" $LOG; then
-    log "ERROR" "Restore failed on $host"
-    notify_team "ERROR: xtrabackup restore failed on $host"
-    return 1
-  fi
-
-  # ── Step 5: Start MySQL ───────────────────────────────────────────────
-  log "INFO" "Step 5: Starting MySQL on $host"
-
-  ansible all \
-    -i "$host," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "systemctl start mysql && echo MYSQL_STARTED" \
-    >> $LOG 2>&1
-
-  sleep 15
-
-  if ! check_mysql_running $host; then
-    log "ERROR" "MySQL failed to start after restore on $host"
-    notify_team "ERROR: MySQL start failed after restore on $host"
-    return 1
-  fi
-
-  log "INFO" "MySQL started successfully on $host"
-
-  # ── Step 6: Setup replication ─────────────────────────────────────────
-  log "INFO" "Step 6: Setting up replication $host -> $new_master"
-
-  mysql \
-    -u $ORC_USER \
-    -p$ORC_PASS \
-    -h $host \
-    -P $MYSQL_PORT \
-    --connect-timeout=30 \
-    -e "STOP SLAVE;
-        RESET SLAVE ALL;
-        CHANGE MASTER TO
-          MASTER_HOST='$new_master',
-          MASTER_USER='$REPL_USER',
-          MASTER_PASSWORD='$REPL_PASS',
-          MASTER_PORT=$MYSQL_PORT,
-          MASTER_AUTO_POSITION=1;
-        START SLAVE;" >> $LOG 2>&1
-
-  # ── Step 7: Cleanup ───────────────────────────────────────────────────
-  log "INFO" "Step 7: Cleanup temp files and MinIO backup"
-
-  # Remove MinIO temp backup
-  $MC rm --insecure $minio_path.xbstream.gz >> $LOG 2>&1
-
-  # Remove local restore dir
-  ansible all \
-    -i "$host," \
-    -u {{ ha_failover_ssh_user }} \
-    --become \
-    -m shell \
-    -a "rm -rf /tmp/xtrabackup_restore/" \
-    >> $LOG 2>&1
-
-  log "INFO" "================================================"
-  log "INFO" "xtrabackup resync completed successfully"
-  log "INFO" "================================================"
-  return 0
-}
-
 # ── Rejoin as slave ───────────────────────────────────────────────────────────
 rejoin_as_slave() {
   local host=$1
@@ -357,10 +189,17 @@ rejoin_as_slave() {
     return $?
   else
     log "WARN" "GTID gap detected: $GAP"
-    log "INFO" "Starting automated xtrabackup resync via MinIO"
-    notify_team "GTID gap on $host — starting automated xtrabackup resync via Ansible+MinIO"
-    xtrabackup_resync $host $new_master
-    return $?
+    log "WARN" "Old master missing transactions — xtrabackup resync required"
+    log "ACTION" "================================================"
+    log "ACTION" "MANUAL RESTORE REQUIRED:"
+    log "ACTION" "1. Open Semaphore: $SEMAPHORE_URL"
+    log "ACTION" "2. Run template:   $SEMAPHORE_RESTORE_TEMPLATE"
+    log "ACTION" "3. Set variables:"
+    log "ACTION" "   restore_source_host: $new_master"
+    log "ACTION" "   restore_target_host: $host"
+    log "ACTION" "================================================"
+    notify_team "GTID gap on $host — Open $SEMAPHORE_URL and run $SEMAPHORE_RESTORE_TEMPLATE. Source: $new_master Target: $host"
+    return 1
   fi
 }
 
@@ -483,7 +322,7 @@ update_proxysql
     exit 1
   fi
 
-  # Step 3: Rejoin (simple or xtrabackup resync)
+  # Step 3: Rejoin as slave
   if rejoin_as_slave $FAILED_HOST $NEW_MASTER; then
 
     sleep 5
@@ -509,8 +348,8 @@ update_proxysql
     fi
 
   else
-    log "ERROR" "Rejoin failed on $FAILED_HOST"
-    notify_team "ERROR: $FAILED_HOST rejoin failed — manual intervention needed"
+    log "ERROR" "Rejoin failed on $FAILED_HOST — GTID gap or other issue"
+    notify_team "ERROR: $FAILED_HOST rejoin failed — check $LOG for details"
   fi
 
 ) &
