@@ -85,11 +85,16 @@
   when: proxysql_configure | default(false)
 
 # ################################## #
-# HA — MinIO Client Configuration    #
+# HA — MinIO Client                  #
+# Install mc on ALL MySQL nodes      #
+# Required for backup and restore    #
 # ################################## #
-- name: Including tasks for MinIO Client Configuration
+- name: Including tasks for MinIO Client Installation
   ansible.builtin.include_tasks: minio.yml
-  when: minio_configure | default(false)
+  when: >
+    minio_configure | default(false) or
+    deploy_backup_scripts | default(false) or
+    configure_replication_users | default(false)
 
 # ################################## #
 # HA — Post-Failover Script          #
