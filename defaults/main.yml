@@ -351,6 +351,12 @@ ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
 ha_failover_max_restart_wait: 900
 ha_failover_retry_interval:   30
 
+# Semaphore URL for alert messages
+ha_semaphore_url: "https://orchestrator.ldc.opstree.dev"
+
+# Restore template name shown in alert
+ha_semaphore_restore_template: "Percona-Restore"
+
 # Notification — leave empty to disable
 ha_slack_webhook_url: ""
 ha_alert_email:       ""
