@@ -4,6 +4,7 @@
 # Installs mc and configures alias pointing to company MinIO
 # Uses --insecure for self-signed SSL certificate
 # S3 API port: 9000 (console port 8443 is web UI only)
+# mc is installed on ALL nodes — needed for backup and restore
 # =============================================================================
 
 - name: Check if mc client already exists
@@ -47,3 +48,4 @@
     - "{{ ha_minio_inc_folder }}"
     - "{{ ha_minio_resync_folder }}"
   changed_when: false
+  when: minio_configure | bool
