@@ -31,11 +31,20 @@ deploy_backup_scripts:       false
 setup_backup_cron:           false
 
 # -----------------------------------------------------------------------------
-# Inventory Group Names — match Proxmox VM tags exactly
+# Inventory Group Names — override to match your inventory group names
+# Default matches Proxmox VM tags in LDC environment
+# Example override: ha_master_group: "master"
 # -----------------------------------------------------------------------------
 ha_master_group:       "percona-master"
 ha_slave_group:        "percona-slave"
 ha_orchestrator_group: "percona-orchestrator"
+
+# -----------------------------------------------------------------------------
+# Backup Server Toggle
+# Set mysql_backup_server: true on the host that should run XtraBackup
+# Can be set per host in inventory: slave_server1 mysql_backup_server=true
+# -----------------------------------------------------------------------------
+mysql_backup_server: false
 
 # -----------------------------------------------------------------------------
 # MySQL Connection & General
@@ -128,7 +137,7 @@ mysql_root_password: "N0Tweak$_@123!"
 mysql_server_id:                  "1"
 mysql_max_binlog_size:            "100M"
 mysql_binlog_format:              "ROW"
-mysql_binlog_expire_logs_seconds: "864000"
+mysql_binlog_expire_logs_seconds: 604800   # 7 days — prevents error 1236 on rejoin
 mysql_gtid_mode:                  true
 
 # Replication user
@@ -149,7 +158,6 @@ mysql_exporter_user:        mysqld_exporter
 mysql_exporter_port:        9104
 mysql_exporter_db_user:     mysqld_exporter
 mysql_exporter_db_password: "Exporter@123!"
-mysql_binlog_expire_logs_seconds: 604800
 
 # =============================================================================
 # HA Variables — Orchestrator / ProxySQL / MinIO
@@ -225,7 +233,7 @@ ha_orchestrator_recover_intermediate_master_filters: ["*"]
 ha_orchestrator_fail_master_if_sql_not_uptodate:     false
 ha_orchestrator_detach_lost_replicas_after_failover: true
 
-# Orchestrator hostname resolution — use none for LDC IP-based environment
+# Orchestrator hostname resolution — use none for IP-based environment
 ha_orchestrator_hostname_resolve_method:       "none"
 ha_orchestrator_mysql_hostname_resolve_method: "none"
 ha_orchestrator_reject_hostname_pattern:       ""
@@ -314,13 +322,13 @@ ha_proxysql_query_rules:
 
 # -----------------------------------------------------------------------------
 # MinIO Settings
-# Override ha_minio_endpoint per environment
+# Override ha_minio_endpoint and credentials per environment
 # -----------------------------------------------------------------------------
 ha_mc_install_path:     "/usr/local/bin/mc"
 ha_minio_alias:         "companyminio"
-ha_minio_endpoint:      "https://minio.ldc.opstree.dev:9000"
+ha_minio_endpoint:      "https://minio.example.com:9000"
 ha_minio_root_user:     "minioadmin"
-ha_minio_root_password: "opstreeadmin@2510"
+ha_minio_root_password: "minioadmin"
 ha_minio_bucket:        "percona-backup"
 ha_minio_full_folder:   "full"
 ha_minio_inc_folder:    "incremental"
@@ -351,15 +359,16 @@ ha_backup_inc_retention_days:  7
 
 # -----------------------------------------------------------------------------
 # Post-Failover Script Settings
-# No SSH required — MySQL client only (LDC environment)
+# No SSH required — MySQL client only
 # -----------------------------------------------------------------------------
-ha_failover_ssh_user: "ubuntu"
+ha_failover_ssh_user:         "ubuntu"
 ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
 ha_failover_max_restart_wait: 900
 ha_failover_retry_interval:   30
 
 # Semaphore URL for alert messages
-ha_semaphore_url: "https://orchestrator.ldc.opstree.dev"
+# Override per environment
+ha_semaphore_url:              "https://semaphore.example.com"
 
 # Restore template name shown in alert
 ha_semaphore_restore_template: "Percona-Restore"
@@ -367,3 +376,414 @@ ha_semaphore_restore_template: "Percona-Restore"
 # Notification — leave empty to disable
 ha_slack_webhook_url: ""
 ha_alert_email:       ""
+
+# -----------------------------------------------------------------------------
+# Current Master IP — used by post-failover script
+# Override per environment
+# -----------------------------------------------------------------------------
+ha_mysql_master_ip: ""
+
+# =============================================================================
+# PMM Monitoring
+# Override per environment via group_vars or Semaphore Variable Group
+# =============================================================================
+ha_pmm_enabled:            false
+ha_pmm_server_url:         "https://pmm.example.com"
+ha_pmm_server_url_encoded: "https://admin:admin%40123@pmm.example.com"
+ha_pmm_username:           "admin"
+ha_pmm_password:           "admin"
+ha_pmm_client_version:     "3.5.0-7.noble"---
+# =============================================================================
+# Percona Server Role — Default Variables
+# Override these in group_vars / host_vars / Semaphore Variable Group.
+# Secrets MUST be overridden via Ansible Vault in production.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Feature Toggles — Percona Server
+# -----------------------------------------------------------------------------
+replication:                false
+backup:                     false
+database_creation:          true
+users_creation:             true
+mysql_metrics_enabled:      true
+mysql_root_password_update: false
+mysql_install_packages:     true
+
+# -----------------------------------------------------------------------------
+# Feature Toggles — HA Components
+# Set per play in playbook.yml — do not change here
+# -----------------------------------------------------------------------------
+orchestrator_install:        false
+orchestrator_configure:      false
+proxysql_install:            false
+proxysql_configure:          false
+minio_configure:             false
+configure_replication_users: false
+deploy_failover_script:      false
+deploy_backup_scripts:       false
+setup_backup_cron:           false
+
+# -----------------------------------------------------------------------------
+# Inventory Group Names — override to match your inventory group names
+# Default matches Proxmox VM tags in LDC environment
+# Example override: ha_master_group: "master"
+# -----------------------------------------------------------------------------
+ha_master_group:       "percona-master"
+ha_slave_group:        "percona-slave"
+ha_orchestrator_group: "percona-orchestrator"
+
+# -----------------------------------------------------------------------------
+# Backup Server Toggle
+# Set mysql_backup_server: true on the host that should run XtraBackup
+# Can be set per host in inventory: slave_server1 mysql_backup_server=true
+# -----------------------------------------------------------------------------
+mysql_backup_server: false
+
+# -----------------------------------------------------------------------------
+# MySQL Connection & General
+# -----------------------------------------------------------------------------
+mysql_port:              "3306"
+mysql_bind_address:      '0.0.0.0'
+mysql_skip_name_resolve: false
+mysql_datadir:           /var/lib/mysql
+mysql_sql_mode:          'STRICT_ALL_TABLES'
+
+# -----------------------------------------------------------------------------
+# Slow Query Log
+# -----------------------------------------------------------------------------
+mysql_slow_query_log_enabled: true
+mysql_slow_query_time:        "2"
+
+# -----------------------------------------------------------------------------
+# Memory Settings
+# -----------------------------------------------------------------------------
+mysql_key_buffer_size:          "256M"
+mysql_max_allowed_packet:       "64M"
+mysql_table_open_cache:         "256"
+mysql_sort_buffer_size:         "1M"
+mysql_read_buffer_size:         "1M"
+mysql_read_rnd_buffer_size:     "4M"
+mysql_myisam_sort_buffer_size:  "64M"
+mysql_thread_cache_size:        "8"
+mysql_max_connections:          "151"
+mysql_tmp_table_size:           "16M"
+mysql_max_heap_table_size:      "16M"
+mysql_group_concat_max_len:     "1024"
+mysql_join_buffer_size:         "262144"
+
+# -----------------------------------------------------------------------------
+# Other Settings
+# -----------------------------------------------------------------------------
+mysql_lower_case_table_names: "0"
+mysql_wait_timeout:           "28800"
+mysql_event_scheduler_state:  "OFF"
+
+# -----------------------------------------------------------------------------
+# InnoDB Settings
+# -----------------------------------------------------------------------------
+mysql_innodb_file_per_table:          "1"
+mysql_innodb_buffer_pool_size:        "256M"
+mysql_innodb_log_file_size:           "64M"
+mysql_innodb_log_buffer_size:         "8M"
+mysql_innodb_flush_log_at_trx_commit: "1"
+mysql_innodb_lock_wait_timeout:       "50"
+
+# -----------------------------------------------------------------------------
+# mysqldump
+# -----------------------------------------------------------------------------
+mysql_mysqldump_max_allowed_packet: "64M"
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+mysql_log: ""
+
+# -----------------------------------------------------------------------------
+# Config Include Files
+# -----------------------------------------------------------------------------
+mysql_config_include_files: []
+mysql_config_include_dir:   /etc/mysql/conf.d
+
+# -----------------------------------------------------------------------------
+# Databases
+# -----------------------------------------------------------------------------
+mysql_databases: []
+
+# -----------------------------------------------------------------------------
+# Users
+# -----------------------------------------------------------------------------
+mysql_users:
+  - name:     mysqld_exporter
+    host:     "localhost"
+    password: "{{ mysql_exporter_db_password }}"
+    priv:     "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+
+# -----------------------------------------------------------------------------
+# Root Credentials
+# Override via Ansible Vault in production
+# -----------------------------------------------------------------------------
+mysql_root_password: "N0Tweak$_@123!"
+
+# -----------------------------------------------------------------------------
+# Replication Settings
+# -----------------------------------------------------------------------------
+mysql_server_id:                  "1"
+mysql_max_binlog_size:            "100M"
+mysql_binlog_format:              "ROW"
+mysql_binlog_expire_logs_seconds: 604800   # 7 days — prevents error 1236 on rejoin
+mysql_gtid_mode:                  true
+
+# Replication user
+mysql_replication_user:
+  name:     "slave"
+  password: "slaveMaster@123!"
+
+# Backup user
+mysql_backup_user:
+  name:     "backup"
+  password: "backUpMaster@123!"
+
+# -----------------------------------------------------------------------------
+# Prometheus mysqld_exporter
+# -----------------------------------------------------------------------------
+mysql_exporter_version:     "0.15.1"
+mysql_exporter_user:        mysqld_exporter
+mysql_exporter_port:        9104
+mysql_exporter_db_user:     mysqld_exporter
+mysql_exporter_db_password: "Exporter@123!"
+
+# =============================================================================
+# HA Variables — Orchestrator / ProxySQL / MinIO
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# HA Replication User
+# Used by orchestrator topology monitoring and post-failover script
+# Override password via Ansible Vault in production
+# -----------------------------------------------------------------------------
+ha_replication_user:
+  name:     "repl"
+  password: "Repl@1234"
+  priv:     "*.*:REPLICATION SLAVE"
+
+# -----------------------------------------------------------------------------
+# Orchestrator Topology User
+# Override password via Ansible Vault in production
+# -----------------------------------------------------------------------------
+ha_orchestrator_topology_user:
+  name:     "orchestrator"
+  password: "Orch@123"
+
+# -----------------------------------------------------------------------------
+# Orchestrator Backend DB User
+# Override password via Ansible Vault in production
+# -----------------------------------------------------------------------------
+ha_orchestrator_backend_user:
+  name:     "orchestrator_srv"
+  password: "OrcSrv@123"
+  database: "orchestrator"
+
+# -----------------------------------------------------------------------------
+# Application ProxySQL User
+# Override password via Ansible Vault in production
+# -----------------------------------------------------------------------------
+ha_app_user:
+  name:                   "appuser"
+  password:               "AppUser@1234"
+  host:                   "%"
+  default_hostgroup:      10
+  transaction_persistent: 1
+  max_connections:        100
+  active:                 1
+
+# -----------------------------------------------------------------------------
+# Orchestrator Settings
+# -----------------------------------------------------------------------------
+ha_orchestrator_version:      "3.2.6"
+ha_orchestrator_port:         3000
+ha_orchestrator_install_path: "/usr/local/orchestrator"
+ha_orchestrator_config_file:  "/etc/orchestrator.conf.json"
+ha_orchestrator_log_file:     "/usr/local/orchestrator/failover.log"
+ha_orchestrator_alert_log:    "/usr/local/orchestrator/alerts.log"
+ha_orchestrator_debug:        false
+
+# Orchestrator polling & detection
+ha_orchestrator_instance_poll_seconds:              5
+ha_orchestrator_recovery_poll_seconds:              2
+# Recovery block period — 0 means no blocking between recoveries
+# Increase in production to prevent cascading failovers
+ha_orchestrator_recovery_period_block_seconds:      0
+ha_orchestrator_detection_sampling_size:            5
+ha_orchestrator_connect_timeout_seconds:            5
+ha_orchestrator_read_timeout_seconds:               30
+ha_orchestrator_reasonable_replication_lag_seconds: 10
+ha_orchestrator_max_replicas_to_render:             5
+
+# Orchestrator recovery
+ha_orchestrator_recovery_enabled:                    true
+ha_orchestrator_recover_master_filters:              ["*"]
+ha_orchestrator_recover_intermediate_master_filters: ["*"]
+ha_orchestrator_fail_master_if_sql_not_uptodate:     false
+ha_orchestrator_detach_lost_replicas_after_failover: true
+
+# Orchestrator hostname resolution — use none for IP-based environment
+ha_orchestrator_hostname_resolve_method:       "none"
+ha_orchestrator_mysql_hostname_resolve_method: "none"
+ha_orchestrator_reject_hostname_pattern:       ""
+
+# -----------------------------------------------------------------------------
+# ProxySQL Settings
+# -----------------------------------------------------------------------------
+ha_proxysql_version:        "2.5.5"
+ha_proxysql_port:           6033
+ha_proxysql_admin_port:     6032
+ha_proxysql_admin_user:     "admin"
+ha_proxysql_admin_password: "admin"
+ha_proxysql_datadir:        "/var/lib/proxysql"
+
+# ProxySQL hostgroups
+ha_proxysql_writer_hostgroup: 10
+ha_proxysql_reader_hostgroup: 20
+
+# ProxySQL connection limits
+ha_proxysql_master_max_connections: 200
+ha_proxysql_slave_max_connections:  100
+ha_proxysql_max_replication_lag:    10
+
+# ProxySQL query rules — 10 production rules
+ha_proxysql_query_rules:
+  - rule_id: 1
+    active: 1
+    match_pattern: "^SELECT.*FOR UPDATE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Locking reads to master"
+  - rule_id: 2
+    active: 1
+    match_pattern: "^SELECT.*LOCK IN SHARE MODE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Lock share mode to master"
+  - rule_id: 3
+    active: 1
+    match_pattern: "^SELECT.*INTO"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SELECT INTO to master"
+  - rule_id: 4
+    active: 1
+    match_pattern: "^SELECT"
+    destination_hostgroup: "{{ ha_proxysql_reader_hostgroup }}"
+    apply: 1
+    comment: "Regular reads to replicas"
+  - rule_id: 5
+    active: 1
+    match_pattern: "^SHOW"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SHOW commands to master"
+  - rule_id: 6
+    active: 1
+    match_pattern: "^SET"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SET commands to master"
+  - rule_id: 7
+    active: 1
+    match_pattern: "^BEGIN"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Transactions to master"
+  - rule_id: 8
+    active: 1
+    match_pattern: "^COMMIT"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Commit to master"
+  - rule_id: 9
+    active: 1
+    match_pattern: "^ROLLBACK"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Rollback to master"
+  - rule_id: 10
+    active: 1
+    match_pattern: "^CALL"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Stored procedures to master"
+
+# -----------------------------------------------------------------------------
+# MinIO Settings
+# Override ha_minio_endpoint and credentials per environment
+# -----------------------------------------------------------------------------
+ha_mc_install_path:     "/usr/local/bin/mc"
+ha_minio_alias:         "companyminio"
+ha_minio_endpoint:      "https://minio.example.com:9000"
+ha_minio_root_user:     "minioadmin"
+ha_minio_root_password: "minioadmin"
+ha_minio_bucket:        "percona-backup"
+ha_minio_full_folder:   "full"
+ha_minio_inc_folder:    "incremental"
+ha_minio_resync_folder: "failover-resync"
+
+# -----------------------------------------------------------------------------
+# Backup Settings
+# -----------------------------------------------------------------------------
+ha_backup_log_file:             "/var/log/mysql-backup.log"
+ha_backup_lsn_file:             "/var/lib/mysql-backup/last_lsn"
+ha_backup_scripts_path:         "/usr/local/bin"
+ha_xtrabackup_parallel:         4
+ha_xtrabackup_compress_threads: 4
+
+# Backup cron schedule
+ha_backup_full_cron_minute:  "0"
+ha_backup_full_cron_hour:    "1"
+ha_backup_full_cron_weekday: "0"
+ha_backup_inc_cron_minute:   "0"
+ha_backup_inc_cron_hour:     "1"
+ha_backup_inc_cron_weekday:  "1-6"
+
+# -----------------------------------------------------------------------------
+# Backup Retention Policy
+# -----------------------------------------------------------------------------
+ha_backup_full_retention_days: 30
+ha_backup_inc_retention_days:  7
+
+# -----------------------------------------------------------------------------
+# Post-Failover Script Settings
+# No SSH required — MySQL client only
+# -----------------------------------------------------------------------------
+ha_failover_ssh_user:         "ubuntu"
+ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
+ha_failover_max_restart_wait: 900
+ha_failover_retry_interval:   30
+
+# Semaphore URL for alert messages
+# Override per environment
+ha_semaphore_url:              "https://semaphore.example.com"
+
+# Restore template name shown in alert
+ha_semaphore_restore_template: "Percona-Restore"
+
+# Notification — leave empty to disable
+ha_slack_webhook_url: ""
+ha_alert_email:       ""
+
+# -----------------------------------------------------------------------------
+# Current Master IP — used by post-failover script
+# Override per environment
+# -----------------------------------------------------------------------------
+ha_mysql_master_ip: ""
+
+# =============================================================================
+# PMM Monitoring
+# Override per environment via group_vars or Semaphore Variable Group
+# =============================================================================
+ha_pmm_enabled:            false
+ha_pmm_server_url:         "https://pmm.example.com"
+ha_pmm_server_url_encoded: "https://admin:admin%40123@pmm.example.com"
+ha_pmm_username:           "admin"
+ha_pmm_password:           "admin"
+ha_pmm_client_version:     "3.5.0-7.noble"
