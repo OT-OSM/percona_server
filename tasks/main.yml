@@ -94,7 +94,8 @@
   when: >
     minio_configure | default(false) or
     deploy_backup_scripts | default(false) or
-    configure_replication_users | default(false)
+    configure_replication_users | default(false) or
+    mysql_backup_server | default(false)
 
 # ################################## #
 # HA — Post-Failover Script          #
@@ -107,9 +108,22 @@
 
 # ################################## #
 # HA — Backup Scripts                #
+# Install on backup server or when   #
+# deploy_backup_scripts is true      #
 # ################################## #
 - name: Including tasks for HA Backup Scripts
   ansible.builtin.include_tasks: backup_scripts.yml
   tags:
     - backup_scripts
-  when: deploy_backup_scripts | default(false)
+  when: >
+    deploy_backup_scripts | default(false) or
+    mysql_backup_server | default(false)
+
+# ################################## #
+# HA — PMM Monitoring Setup          #
+# ################################## #
+- name: Including tasks for PMM Monitoring Setup
+  ansible.builtin.include_tasks: pmm.yml
+  tags:
+    - pmm
+  when: ha_pmm_enabled | default(false)
