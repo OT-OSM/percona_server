@@ -50,21 +50,21 @@ long_query_time     = {{ mysql_slow_query_time }}
 # Value is passed via playbook vars (mysql_server_id=1 for master, 2 for slave).
 server-id = {{ mysql_server_id }}
 
-{% if inventory_hostname in groups['percona-master'] | default([]) %}
+{% if inventory_hostname in groups[ha_master_group] | default([]) %}
 # -------------------------------------------------------
 # Replication - Primary (Master)
 # -------------------------------------------------------
-log_bin         = mysql-bin
-log-bin-index   = mysql-bin.index
+log_bin                    = mysql-bin
+log-bin-index              = mysql-bin.index
 binlog_expire_logs_seconds = {{ mysql_binlog_expire_logs_seconds }}
 max_binlog_size            = {{ mysql_max_binlog_size }}
 binlog_format              = {{ mysql_binlog_format }}
 
 {% if mysql_gtid_mode | default(false) %}
 # GTID Replication — enabled for production/DR
-gtid_mode                  = ON
-enforce_gtid_consistency   = ON
-log_replica_updates        = ON
+gtid_mode                = ON
+enforce_gtid_consistency = ON
+log_replica_updates      = ON
 {% endif %}
 
 {% for db in mysql_databases %}
@@ -75,7 +75,7 @@ binlog_ignore_db = {{ db.name }}
 {% endif %}
 {% endfor %}
 
-{% elif inventory_hostname in groups['percona-slave'] | default([]) %}
+{% elif inventory_hostname in groups[ha_slave_group] | default([]) %}
 # -------------------------------------------------------
 # Replication - Replica (Slave)
 # -------------------------------------------------------
@@ -86,9 +86,9 @@ relay-log-index       = relay-bin.index
 
 {% if mysql_gtid_mode | default(false) %}
 # GTID Replication — enabled for production/DR
-gtid_mode                  = ON
-enforce_gtid_consistency   = ON
-log_replica_updates        = ON
+gtid_mode                = ON
+enforce_gtid_consistency = ON
+log_replica_updates      = ON
 {% endif %}
 {% endif %}
 
@@ -113,9 +113,9 @@ join_buffer_size        = {{ mysql_join_buffer_size }}
 # query_cache_* removed entirely in MySQL 8.0 — not conditionally included.
 
 # Other settings.
-wait_timeout         = {{ mysql_wait_timeout }}
+wait_timeout           = {{ mysql_wait_timeout }}
 lower_case_table_names = {{ mysql_lower_case_table_names }}
-event_scheduler      = {{ mysql_event_scheduler_state }}
+event_scheduler        = {{ mysql_event_scheduler_state }}
 
 # InnoDB settings.
 # innodb_large_prefix and innodb_file_format were removed in MySQL 8.0 — not included.
