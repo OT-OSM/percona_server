@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# HA Backup Scripts — runs on slave nodes
+# HA Backup Scripts — runs on slave/backup nodes
 # xtrabackup streams directly to MinIO — no local disk usage
 # =============================================================================
 
@@ -30,12 +30,12 @@
     state: present
   when: qpress_apt.failed | default(false)
 
-- name: Check if mc client already exists on slave
+- name: Check if mc client already exists
   ansible.builtin.stat:
     path: "{{ ha_mc_install_path }}"
   register: mc_binary_stat_slave
 
-- name: Download MinIO client (mc) on slave
+- name: Download MinIO client (mc)
   ansible.builtin.get_url:
     url:   "https://dl.min.io/client/mc/release/linux-amd64/mc"
     dest:  "{{ ha_mc_install_path }}"
@@ -44,7 +44,7 @@
     group: root
   when: not mc_binary_stat_slave.stat.exists
 
-- name: Configure mc alias on slave
+- name: Configure mc alias
   ansible.builtin.command: >
     {{ ha_mc_install_path }} alias set {{ ha_minio_alias }}
     {{ ha_minio_endpoint }}
@@ -97,7 +97,9 @@
     job:     "{{ ha_backup_scripts_path }}/mysql-full-backup.sh >> {{ ha_backup_log_file }} 2>&1"
     user:    root
     state:   present
-  when: setup_backup_cron | default(false)
+  when: >
+    setup_backup_cron | default(false) or
+    mysql_backup_server | default(false)
 
 - name: Setup incremental backup cron job
   ansible.builtin.cron:
@@ -108,4 +110,6 @@
     job:     "{{ ha_backup_scripts_path }}/mysql-incremental-backup.sh >> {{ ha_backup_log_file }} 2>&1"
     user:    root
     state:   present
-  when: setup_backup_cron | default(false)
+  when: >
+    setup_backup_cron | default(false) or
+    mysql_backup_server | default(false)
