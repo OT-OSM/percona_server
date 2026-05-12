@@ -18,7 +18,6 @@ mysql_install_packages:     true
 
 # -----------------------------------------------------------------------------
 # Feature Toggles — HA Components
-# Set per play in playbook.yml — do not change here
 # -----------------------------------------------------------------------------
 orchestrator_install:        false
 orchestrator_configure:      false
