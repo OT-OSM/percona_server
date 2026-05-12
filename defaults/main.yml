@@ -392,7 +392,7 @@ ha_pmm_server_url:         "https://pmm.example.com"
 ha_pmm_server_url_encoded: "https://admin:admin%40123@pmm.example.com"
 ha_pmm_username:           "admin"
 ha_pmm_password:           "admin"
-ha_pmm_client_version:     "3.5.0-7.noble"---
+ha_pmm_client_version:     "3.5.0-7.noble"
 # =============================================================================
 # Percona Server Role — Default Variables
 # Override these in group_vars / host_vars / Semaphore Variable Group.
