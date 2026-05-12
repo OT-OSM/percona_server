@@ -5,6 +5,8 @@
 # Uses --insecure for self-signed SSL certificate
 # S3 API port: 9000 (console port 8443 is web UI only)
 # mc is installed on ALL nodes — needed for backup and restore
+# Folder structure (YYYY-MM-DD/day/) is created by backup scripts
+# Only failover-resync/ is pre-created here as it is not backup-managed
 # =============================================================================
 
 - name: Check if mc client already exists
@@ -38,15 +40,18 @@
   register: minio_check
   failed_when: minio_check.rc != 0
 
-# Create bucket structure only on designated MinIO node (slave)
-- name: Create MinIO bucket folder structure
+- name: Ensure MinIO bucket exists
   ansible.builtin.command: >
     {{ ha_mc_install_path }} mb --ignore-existing
-    {{ ha_minio_alias }}/{{ ha_minio_bucket }}/{{ item }}
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}
     --insecure
-  loop:
-    - "{{ ha_minio_full_folder }}"
-    - "{{ ha_minio_inc_folder }}"
-    - "{{ ha_minio_resync_folder }}"
+  changed_when: false
+  when: minio_configure | bool
+
+- name: Create failover-resync folder in MinIO bucket
+  ansible.builtin.command: >
+    {{ ha_mc_install_path }} mb --ignore-existing
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}/{{ ha_minio_resync_folder }}
+    --insecure
   changed_when: false
   when: minio_configure | bool
