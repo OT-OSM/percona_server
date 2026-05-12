@@ -1,212 +1,117 @@
-# =============================================================================
-# Percona Server Role — Default Variables
-# =============================================================================
-# IMPORTANT:
-#   Sensitive values (passwords) MUST be overridden via:
-#   - Ansible Vault (group_vars/vault.yml)
-#   - Semaphore Environment Variables
-#   - vars/vars.yml in playbook directory
-#
-#   Defaults here are for REFERENCE ONLY — not for production use.
-# =============================================================================
-
-# =====================================================
-# FEATURE TOGGLES
-# =====================================================
-# Set to true to forcibly update the root password
+---
+# Set this to `true` to forcibly update the root password.
 mysql_root_password_update: false
 
-# =====================================================
-# MYSQL — CONNECTION & GENERAL
-# =====================================================
-mysql_port:              "3306"
-mysql_bind_address:      '0.0.0.0'
+# MySQL connection settings.
+mysql_port: "3306"
+mysql_bind_address: '0.0.0.0'
 mysql_skip_name_resolve: false
-mysql_datadir:           /var/lib/mysql
-mysql_sql_mode:          'STRICT_ALL_TABLES'
+mysql_datadir: /var/lib/mysql
+mysql_sql_mode: 'STRICT_ALL_TABLES'
 
-# =====================================================
-# MYSQL — SLOW QUERY LOG
-# =====================================================
+# Slow query log settings.
 mysql_slow_query_log_enabled: true
-mysql_slow_query_time:        "2"
-mysql_slow_query_log_file:    /var/log/mysql-slow.log
+mysql_slow_query_time: "2"
+# The following variable has a default value depending on operating system.
+mysql_slow_query_log_file: /var/log/mysql-slow.log
 
-# =====================================================
-# MYSQL — MEMORY SETTINGS
-# Auto-calculated based on system RAM (ansible_memtotal_mb)
-# T-Shirt sizing reference:
-#   S  (~2GB  RAM) → dev/test
-#   M  (~4GB  RAM) → staging
-#   L  (~8GB  RAM) → production
-#   XL (~16GB RAM) → high traffic
-#
+# Memory settings (default values optimized for ~512MB RAM).
+mysql_key_buffer_size: "256M"
+mysql_max_allowed_packet: "64M"
+mysql_table_open_cache: "256"
+mysql_sort_buffer_size: "1M"
+mysql_read_buffer_size: "1M"
+mysql_read_rnd_buffer_size: "4M"
+mysql_myisam_sort_buffer_size: "64M"
+mysql_thread_cache_size: "8"
+mysql_query_cache_type: "0"
+mysql_query_cache_size: "16M"
+mysql_query_cache_limit: "1M"
+mysql_max_connections: "151"
+mysql_tmp_table_size: "16M"
+mysql_max_heap_table_size: "16M"
+mysql_group_concat_max_len: "1024"
+mysql_join_buffer_size: "262144"
 
-# Override in vars/vars.yml if auto-calc not suitable:
-#   mysql_innodb_buffer_pool_size: "4G"
-#   mysql_max_connections:         "500"
-# =====================================================
+# Other settings.
+mysql_lower_case_table_names: "0"
+mysql_wait_timeout: "28800"
+mysql_event_scheduler_state: "OFF"
 
-# InnoDB buffer pool = 70% of total RAM (min 128M)
-mysql_innodb_buffer_pool_size: >-
-  {{ [((ansible_memtotal_mb | default(512)) * 0.70) | int, 128] | max }}M
+# InnoDB settings.
+mysql_innodb_file_per_table: "1"
+# Set .._buffer_pool_size up to 80% of RAM but beware of setting too high.
+mysql_innodb_buffer_pool_size: "256M"
+# Set .._log_file_size to 25% of buffer pool size.
+mysql_innodb_log_file_size: "64M"
+mysql_innodb_log_buffer_size: "8M"
+mysql_innodb_flush_log_at_trx_commit: "1"
+mysql_innodb_lock_wait_timeout: "50"
 
-# InnoDB log file = 25% of buffer pool (min 64M)
-mysql_innodb_log_file_size: >-
-  {{ [((ansible_memtotal_mb | default(512)) * 0.175) | int, 64] | max }}M
+# These settings require MySQL > 5.5.
+mysql_innodb_large_prefix: "1"
+mysql_innodb_file_format: "barracuda"
 
-# InnoDB log buffer = 2% of RAM (min 8M)
-mysql_innodb_log_buffer_size: >-
-  {{ [((ansible_memtotal_mb | default(512)) * 0.02) | int, 8] | max }}M
-
-# Max connections = 20% of RAM in MB (min 50)
-mysql_max_connections: >-
-  {{ [((ansible_memtotal_mb | default(512)) * 0.20) | int, 50] | max }}
-
-# Thread cache = connections/4 (min 8, max 64)
-mysql_thread_cache_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 8] | max, 64] | min }}
-
-# Tmp table size = 5% of RAM (min 16M, max 256M)
-mysql_tmp_table_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 16] | max, 256] | min }}M
-
-# Max heap = same as tmp table size
-mysql_max_heap_table_size: "{{ mysql_tmp_table_size }}"
-
-# Sort buffer = 1% of RAM (min 1M, max 16M)
-mysql_sort_buffer_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.01) | int, 1] | max, 16] | min }}M
-
-# Read buffer = 0.5% of RAM (min 1M, max 8M)
-mysql_read_buffer_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.005) | int, 1] | max, 8] | min }}M
-
-# Read RND buffer = 1% of RAM (min 4M, max 32M)
-mysql_read_rnd_buffer_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.01) | int, 4] | max, 32] | min }}M
-
-# Join buffer = 1% of RAM in bytes (min 256K, max 8M)
-mysql_join_buffer_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.01 * 1024 * 1024) | int, 262144] | max, 8388608] | min }}
-
-# Table open cache = max_connections * 2 (min 256)
-mysql_table_open_cache: >-
-  {{ [mysql_max_connections | int * 2, 256] | max }}
-
-# Key buffer (MyISAM) = 5% of RAM (min 64M, max 256M)
-mysql_key_buffer_size: >-
-  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 64] | max, 256] | min }}M
-
-# =====================================================
-# MYSQL — FIXED MEMORY SETTINGS
-# Not RAM dependent — safe for all sizes
-# =====================================================
-mysql_max_allowed_packet:           "64M"
-mysql_myisam_sort_buffer_size:      "64M"
-mysql_group_concat_max_len:         "1024"
+# mysqldump settings.
 mysql_mysqldump_max_allowed_packet: "64M"
 
-# =====================================================
-# MYSQL — OTHER SETTINGS
-# =====================================================
-mysql_lower_case_table_names: "0"
-mysql_wait_timeout:           "28800"
-mysql_event_scheduler_state:  "OFF"
-
-# =====================================================
-# MYSQL — INNODB SETTINGS (FIXED)
-# =====================================================
-mysql_innodb_file_per_table:          "1"
-mysql_innodb_flush_log_at_trx_commit: "1"
-mysql_innodb_lock_wait_timeout:       "50"
-
-# =====================================================
-# MYSQL — LOGGING
-# =====================================================
+# Logging settings.
 mysql_log: ""
-# mysql_log_error:  /var/log/mysql/mysql.err
+# The following variables have a default value depending on operating system.
+# mysql_log_error: /var/log/mysql/mysql.err
 # mysql_syslog_tag: mysql
 
-# =====================================================
-# MYSQL — CONFIG INCLUDE FILES
-# =====================================================
 mysql_config_include_files: []
 #  - src: path/relative/to/playbook/file.cnf
 #  - { src: path/relative/to/playbook/anotherfile.cnf, force: yes }
+
+# Directory for additional MySQL config fragments (used with mysql_config_include_files).
 mysql_config_include_dir: /etc/mysql/conf.d
 
-# =====================================================
-# MYSQL — DATABASES
-# Override in group_vars / host_vars
-# Left empty to avoid accidental creation
-# =====================================================
+## Databases.
+# Override in group_vars / host_vars. Left empty to avoid accidental creation.
 mysql_databases: []
 #  - name: myapp_db
 #    collation: utf8_general_ci
 #    encoding: utf8
 #    replicate: 1
 
-# =====================================================
-# MYSQL — USERS
-# Override in group_vars / host_vars
-# Passwords MUST come from Ansible Vault
-# =====================================================
+# Users.
+# Override in group_vars / host_vars. Passwords should come from Ansible Vault.
 mysql_users:
-  - name:     mysqld_exporter
-    host:     "localhost"
-    password: "{{ mysql_exporter_db_password }}"
-    priv:     "*.*:PROCESS,REPLICATION CLIENT,SELECT"
-#  - name:     myapp_user
-#    host:     "localhost"
-#    password: "{{ vault_myapp_password }}"
-#    priv:     "myapp_db.*:ALL"
+ - name: mysqld_exporter
+   host: "localhost"
+   password: "VaultThis@Password!123"
+   priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+#  - name: myapp_user
+#    host: "localhost"
+#    password: "VaultThis@Password!123"
+#    priv: "myapp_db.*:ALL"
 
-# =====================================================
-# MYSQL — ROOT CREDENTIALS
-# IMPORTANT: Override via Ansible Vault in production!
-# Semaphore env var: VAULT_MYSQL_ROOT_PASSWORD
-# =====================================================
-mysql_root_username: "root"
-mysql_root_password: "changeme"
+# MySQL root credentials.
+# IMPORTANT: Override this via Ansible Vault in group_vars/host_vars!
+mysql_root_password: "N0Tweak$_@123!"
 
-# =====================================================
-# MYSQL — REPLICATION SETTINGS
-# mysql_server_id set per play in playbook.yml
-# Master play: mysql_server_id: "1"
-# Slave play:  mysql_server_id: "2"
-# =====================================================
-mysql_server_id:                  "1"
-mysql_max_binlog_size:            "100M"
-mysql_binlog_format:              "ROW"
-mysql_binlog_expire_logs_seconds: 604800   # 7 days — prevents error 1236 on rejoin
-mysql_gtid_mode:                  true
+# Replication settings (replication is only enabled if replication: true).
+mysql_server_id: "1"
+mysql_max_binlog_size: "100M"
+mysql_binlog_format: "MIXED"
+mysql_expire_logs_days: "10"
 
-# =====================================================
-# MYSQL — REPLICATION USER
+# Replication user credentials.
 # IMPORTANT: Override password via Ansible Vault!
-# Semaphore env var: VAULT_REPL_PASSWORD
-# =====================================================
 mysql_replication_user:
-  name:     "slave"
-  password: "changeme"
+  name: slave
+  password: "slaveMaster@123!"
 
-# =====================================================
-# MYSQL — BACKUP USER
+# Backup user credentials.
 # IMPORTANT: Override password via Ansible Vault!
-# =====================================================
 mysql_backup_user:
-  name:     "backup"
-  password: "changeme"
+  name: backup
+  password: "backUpMaster@123!"
 
-# =====================================================
-# MYSQLD_EXPORTER — PROMETHEUS METRICS
-# Semaphore env var: VAULT_EXPORTER_PASSWORD
-# =====================================================
-mysql_metrics_enabled:      true
-mysql_exporter_version:     "0.15.1"
-mysql_exporter_user:        mysqld_exporter
-mysql_exporter_port:        9104
-mysql_exporter_db_user:     mysqld_exporter
-mysql_exporter_db_password: "changeme"
-mysql_socket:               /var/run/mysqld/mysqld.sock
+# mysqld_exporter toggle and settings.
+mysql_metrics_enabled: true
+mysql_exporter_version: "0.15.1"
+mysql_exporter_user: mysqld_exporter
+mysql_exporter_port: 9104
