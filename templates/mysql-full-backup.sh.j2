@@ -1,26 +1,35 @@
 #!/bin/bash
 # {{ ansible_managed }}
 # Full xtrabackup stream to MinIO — runs from slave node
+# Structure: percona-backup/YYYY-MM-DD/sunday/full_YYYYMMDD_HHMMSS.xbstream.gz
 
 ORC_USER="{{ ha_orchestrator_topology_user.name }}"
 ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
 MINIO_ALIAS="{{ ha_minio_alias }}"
 MINIO_BUCKET="{{ ha_minio_bucket }}"
 MC="{{ ha_mc_install_path }}"
-BACKUP_NAME="full_$(date +%Y%m%d_%H%M%S)"
 LOG="{{ ha_backup_log_file }}"
 LSN_FILE="{{ ha_backup_lsn_file }}"
+
+# ── Date-based folder structure ───────────────────────────────────────────────
+WEEK_DATE=$(date +%Y-%m-%d)
+DAY_NAME=$(date +%A | tr '[:upper:]' '[:lower:]')
+BACKUP_NAME="full_$(date +%Y%m%d_%H%M%S)"
+MINIO_PATH="$MINIO_BUCKET/$WEEK_DATE/$DAY_NAME"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG; }
 
 log "INFO" "Starting full backup: $BACKUP_NAME"
+log "INFO" "MinIO path: $MINIO_PATH/$BACKUP_NAME.xbstream.gz"
 
+# ── Configure mc alias ────────────────────────────────────────────────────────
 $MC alias set $MINIO_ALIAS \
   {{ ha_minio_endpoint }} \
   {{ ha_minio_root_user }} \
   {{ ha_minio_root_password }} \
   --insecure > /dev/null 2>&1
 
+# ── Stream backup to MinIO ────────────────────────────────────────────────────
 xtrabackup \
   --backup \
   --user=$ORC_USER \
@@ -31,7 +40,7 @@ xtrabackup \
   --compress-threads={{ ha_xtrabackup_compress_threads }} \
   2>/tmp/xtrabackup_full.log \
 | $MC pipe --insecure \
-  $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_full_folder }}/$BACKUP_NAME.xbstream.gz
+  $MINIO_ALIAS/$MINIO_PATH/$BACKUP_NAME.xbstream.gz
 
 BACKUP_EXIT=${PIPESTATUS[0]}
 UPLOAD_EXIT=${PIPESTATUS[1]}
@@ -42,19 +51,19 @@ if [ "${BACKUP_EXIT:-1}" -ne 0 ] || [ "${UPLOAD_EXIT:-1}" -ne 0 ]; then
   exit 1
 fi
 
+# ── Save LSN for incremental backups ─────────────────────────────────────────
 mkdir -p $(dirname $LSN_FILE)
 LSN=$(grep "The latest check point" /tmp/xtrabackup_full.log \
   | awk '{print $NF}' | tr -d "'")
 echo $LSN > $LSN_FILE
-
 log "INFO" "LSN saved: $LSN"
-log "INFO" "Full backup complete: $BACKUP_NAME"
+log "INFO" "Full backup complete: $MINIO_PATH/$BACKUP_NAME.xbstream.gz"
 
-# ── Cleanup old full backups ──────────────────────────────────────────────────
+# ── Cleanup old weekly folders ────────────────────────────────────────────────
 log "INFO" "Cleaning full backups older than {{ ha_backup_full_retention_days }} days"
 $MC rm --insecure --recursive --force \
   --older-than {{ ha_backup_full_retention_days }}d \
-  $MINIO_ALIAS/$MINIO_BUCKET/{{ ha_minio_full_folder }}/ >> $LOG 2>&1 || true
+  $MINIO_ALIAS/$MINIO_BUCKET/ >> $LOG 2>&1 || true
 
 log "INFO" "Current storage after cleanup:"
 $MC du --insecure \
