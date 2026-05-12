@@ -90,7 +90,3 @@
     - mysql_login_check.rc == 0
     - mysql_install_packages | bool or mysql_root_password_update
     - inventory_hostname not in groups[ha_slave_group]
-  changed_when: true
-  when:
-    - mysql_login_check.rc == 0
-    - mysql_install_packages | bool or mysql_root_password_update
