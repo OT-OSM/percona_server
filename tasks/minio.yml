@@ -31,7 +31,7 @@
     {{ ha_minio_root_password }}
     --insecure
   changed_when: false
-  no_log: true
+  no_log: false
 
 - name: Verify MinIO connection
   ansible.builtin.command: >
