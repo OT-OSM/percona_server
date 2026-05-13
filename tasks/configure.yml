@@ -13,6 +13,7 @@
     group: root
     mode: "0644"
   notify: restart_percona
+  register: mysql_config
 
 - name: Create slow query log file
   ansible.builtin.file:
@@ -53,3 +54,17 @@
     state: started
     enabled: true
   register: mysql_service_configuration
+
+# Flush handlers immediately after config — ensures MySQL restarts
+# before replication tasks run, picking up server-id and GTID settings.
+- name: Flush handlers to apply config changes
+  ansible.builtin.meta: flush_handlers
+
+# Explicit restart if config changed but MySQL was already running
+# (handler only fires on 'changed' — this catches reruns where config
+# was already written but MySQL never restarted to pick it up)
+- name: Restart MySQL if config was updated
+  ansible.builtin.service:
+    name: "{{ mysql_daemon }}"
+    state: restarted
+  when: mysql_config is changed

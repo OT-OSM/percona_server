@@ -1,0 +1,77 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Incremental xtrabackup stream to MinIO — runs from slave node
+# Structure: percona-backup/YYYY-MM-DD/<weekday>/inc_<day>_YYYYMMDD_HHMMSS.xbstream.gz
+
+ORC_USER="{{ ha_orchestrator_topology_user.name }}"
+ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
+MINIO_ALIAS="{{ ha_minio_alias }}"
+MINIO_BUCKET="{{ ha_minio_bucket }}"
+MC="{{ ha_mc_install_path }}"
+LOG="{{ ha_backup_log_file }}"
+LSN_FILE="{{ ha_backup_lsn_file }}"
+
+# ── Date-based folder structure ───────────────────────────────────────────────
+WEEK_DATE=$(date +%Y-%m-%d)
+DAY_NAME=$(date +%A | tr '[:upper:]' '[:lower:]')
+BACKUP_NAME="inc_${DAY_NAME}_$(date +%Y%m%d_%H%M%S)"
+MINIO_PATH="$MINIO_BUCKET/$WEEK_DATE/$DAY_NAME"
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG; }
+
+# ── Check LSN file exists ─────────────────────────────────────────────────────
+if [ ! -f "$LSN_FILE" ]; then
+  log "ERROR" "No LSN file found — run full backup first"
+  exit 1
+fi
+
+LSN=$(cat $LSN_FILE)
+log "INFO" "Starting incremental backup: $BACKUP_NAME (base LSN: $LSN)"
+log "INFO" "MinIO path: $MINIO_PATH/$BACKUP_NAME.xbstream.gz"
+
+# ── Configure mc alias ────────────────────────────────────────────────────────
+$MC alias set $MINIO_ALIAS \
+  {{ ha_minio_endpoint }} \
+  {{ ha_minio_root_user }} \
+  {{ ha_minio_root_password }} \
+  --insecure > /dev/null 2>&1
+
+# ── Stream incremental backup to MinIO ───────────────────────────────────────
+xtrabackup \
+  --backup \
+  --user=$ORC_USER \
+  --password=$ORC_PASS \
+  --stream=xbstream \
+  --parallel={{ ha_xtrabackup_parallel }} \
+  --compress \
+  --compress-threads={{ ha_xtrabackup_compress_threads }} \
+  --incremental-lsn=$LSN \
+  2>/tmp/xtrabackup_inc.log \
+| $MC pipe --insecure \
+  $MINIO_ALIAS/$MINIO_PATH/$BACKUP_NAME.xbstream.gz
+
+BACKUP_EXIT=${PIPESTATUS[0]}
+UPLOAD_EXIT=${PIPESTATUS[1]}
+
+if [ $BACKUP_EXIT -ne 0 ] || [ $UPLOAD_EXIT -ne 0 ]; then
+  log "ERROR" "Incremental backup failed! xtrabackup=$BACKUP_EXIT upload=$UPLOAD_EXIT"
+  tail -5 /tmp/xtrabackup_inc.log >> $LOG
+  exit 1
+fi
+
+# ── Save new LSN ──────────────────────────────────────────────────────────────
+NEW_LSN=$(grep "The latest check point" /tmp/xtrabackup_inc.log \
+  | awk '{print $NF}' | tr -d "'")
+echo $NEW_LSN > $LSN_FILE
+log "INFO" "New LSN saved: $NEW_LSN"
+log "INFO" "Incremental backup complete: $MINIO_PATH/$BACKUP_NAME.xbstream.gz"
+
+# ── Cleanup old backups ───────────────────────────────────────────────────────
+log "INFO" "Cleaning incremental backups older than {{ ha_backup_inc_retention_days }} days"
+$MC rm --insecure --recursive --force \
+  --older-than {{ ha_backup_inc_retention_days }}d \
+  $MINIO_ALIAS/$MINIO_BUCKET/ >> $LOG 2>&1 || true
+
+log "INFO" "Current storage after cleanup:"
+$MC du --insecure \
+  $MINIO_ALIAS/$MINIO_BUCKET/ 2>/dev/null | tee -a $LOG

@@ -1,4 +1,7 @@
 ---
+# =============================================================================
+# Internal Role Constants — NOT meant to be overridden
+# =============================================================================
 
 version: "8.0"
 
@@ -7,21 +10,38 @@ percona_packages:
   - python3-pip
   - "percona-server-server"
 
-mysql_daemon: mysql
-mysql_config_file: /etc/mysql/my.cnf
+mysql_daemon:          mysql
+mysql_config_file:     /etc/mysql/my.cnf
 mysql_slow_query_log_file: /var/log/mysql/mysql-slow.log
-mysql_socket: /var/run/mysqld/mysqld.sock
-mysql_pid_file: /var/run/mysqld/mysqld.pid
-mysql_log_error: /var/log/mysql/mysql.err
-mysql_root_username: root
-mysql_supports_innodb_large_prefix: true
+mysql_socket:          /var/run/mysqld/mysqld.sock
+mysql_pid_file:        /var/run/mysqld/mysqld.pid
+mysql_log_error:       /var/log/mysql/mysql.err
+mysql_root_username:   root
 mysql_install_packages: true
 
 replication: false
-backup: false
+backup:      false
 
 mysql_backup_config_file: /etc/mysql/backup.cnf
-mysql_backup_directory: /backups/mysql
+mysql_backup_directory:   /backups/mysql
 
 database_creation: true
-users_creation: true
+users_creation:    true
+
+# Orchestrator internal constants
+orchestrator_binary:       "{{ ha_orchestrator_install_path }}/orchestrator"
+orchestrator_service_name: "orchestrator"
+orchestrator_service_file: "/etc/systemd/system/orchestrator.service"
+orchestrator_tmp_archive:  "/tmp/orchestrator-{{ ha_orchestrator_version }}.tar.gz"
+orchestrator_download_url: "https://github.com/openark/orchestrator/releases/download/v{{ ha_orchestrator_version }}/orchestrator-{{ ha_orchestrator_version }}-linux-amd64.tar.gz"
+
+# ProxySQL internal constants
+proxysql_service_name: "proxysql"
+proxysql_pid_file:     "{{ ha_proxysql_datadir }}/proxysql.pid"
+proxysql_tmp_package:  "/tmp/proxysql_{{ ha_proxysql_version }}.deb"
+proxysql_download_url: "https://github.com/sysown/proxysql/releases/download/v{{ ha_proxysql_version }}/proxysql_{{ ha_proxysql_version }}-ubuntu20_amd64.deb"
+
+# XtraBackup packages
+xtrabackup_packages:
+  - percona-xtrabackup-80
+  - qpress

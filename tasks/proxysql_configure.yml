@@ -1,0 +1,138 @@
+---
+# =============================================================================
+# ProxySQL Configuration
+# Uses mysql client directly on admin port 6032
+# No community.proxysql collection required
+# =============================================================================
+
+- name: Configure ProxySQL replication hostgroups
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_replication_hostgroups;
+    INSERT INTO mysql_replication_hostgroups
+    (writer_hostgroup,reader_hostgroup,check_type,comment)
+    VALUES({{ ha_proxysql_writer_hostgroup }},
+    {{ ha_proxysql_reader_hostgroup }},'read_only','MySQL HA Cluster');
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;"
+  changed_when: false
+  no_log: true
+
+- name: Configure ProxySQL backend server master
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_servers
+    WHERE hostname='{{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}';
+    INSERT INTO mysql_servers
+    (hostgroup_id,hostname,port,max_connections,status)
+    VALUES({{ ha_proxysql_writer_hostgroup }},
+    '{{ hostvars[groups[ha_master_group][0]]['ansible_default_ipv4']['address'] }}',
+    {{ mysql_port }},{{ ha_proxysql_master_max_connections }},'ONLINE');
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;"
+  changed_when: false
+  no_log: true
+
+- name: Configure ProxySQL backend servers slaves
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_servers
+    WHERE hostname='{{ hostvars[item]['ansible_default_ipv4']['address'] }}';
+    INSERT INTO mysql_servers
+    (hostgroup_id,hostname,port,max_connections,max_replication_lag,status)
+    VALUES({{ ha_proxysql_reader_hostgroup }},
+    '{{ hostvars[item]['ansible_default_ipv4']['address'] }}',
+    {{ mysql_port }},{{ ha_proxysql_slave_max_connections }},
+    {{ ha_proxysql_max_replication_lag }},'ONLINE');
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;"
+  changed_when: false
+  no_log: true
+  loop: "{{ groups[ha_slave_group] }}"
+
+- name: Configure ProxySQL app user
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_users
+    WHERE username='{{ ha_app_user.name }}';
+    INSERT INTO mysql_users
+    (username,password,default_hostgroup,active,transaction_persistent,max_connections)
+    VALUES('{{ ha_app_user.name }}','{{ ha_app_user.password }}',
+    {{ ha_app_user.default_hostgroup }},{{ ha_app_user.active | default(1) }},
+    {{ ha_app_user.transaction_persistent | default(1) }},
+    {{ ha_app_user.max_connections | default(100) }});
+    LOAD MYSQL USERS TO RUNTIME;
+    SAVE MYSQL USERS TO DISK;"
+  changed_when: false
+  no_log: true
+
+- name: Configure ProxySQL orchestrator user
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_users
+    WHERE username='{{ ha_orchestrator_topology_user.name }}';
+    INSERT INTO mysql_users
+    (username,password,default_hostgroup,active,transaction_persistent,max_connections)
+    VALUES('{{ ha_orchestrator_topology_user.name }}',
+    '{{ ha_orchestrator_topology_user.password }}',
+    {{ ha_proxysql_writer_hostgroup }},1,0,10);
+    LOAD MYSQL USERS TO RUNTIME;
+    SAVE MYSQL USERS TO DISK;"
+  changed_when: false
+  no_log: true
+
+- name: Configure ProxySQL query rules
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "DELETE FROM mysql_query_rules
+    WHERE rule_id={{ item.rule_id }};
+    INSERT INTO mysql_query_rules
+    (rule_id,active,match_pattern,destination_hostgroup,apply,comment)
+    VALUES({{ item.rule_id }},{{ item.active }},'{{ item.match_pattern }}',
+    {{ item.destination_hostgroup }},{{ item.apply }},'{{ item.comment | default('') }}');
+    LOAD MYSQL QUERY RULES TO RUNTIME;
+    SAVE MYSQL QUERY RULES TO DISK;"
+  changed_when: false
+  loop: "{{ ha_proxysql_query_rules }}"
+
+- name: Set ProxySQL monitor credentials
+  ansible.builtin.command: >
+    mysql
+    -u {{ ha_proxysql_admin_user }}
+    -p{{ ha_proxysql_admin_password }}
+    -h 127.0.0.1
+    -P {{ ha_proxysql_admin_port }}
+    -e "UPDATE global_variables
+    SET variable_value='{{ ha_orchestrator_topology_user.name }}'
+    WHERE variable_name='mysql-monitor_username';
+    UPDATE global_variables
+    SET variable_value='{{ ha_orchestrator_topology_user.password }}'
+    WHERE variable_name='mysql-monitor_password';
+    LOAD MYSQL VARIABLES TO RUNTIME;
+    SAVE MYSQL VARIABLES TO DISK;"
+  changed_when: false
+  no_log: true

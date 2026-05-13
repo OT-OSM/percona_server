@@ -1,51 +1,92 @@
 ---
-- name: Check MySQL socket login
+# =============================================================================
+# Secure Installation Tasks
+# Uses password auth — caching_sha2_password (no socket auth)
+# Write operations master-only — slave inherits via replication
+# =============================================================================
+
+- name: Check MySQL login with password
   ansible.builtin.command: >
-    mysql --protocol=socket -S {{ mysql_socket }} -NBe "SELECT 1"
-  register: mysql_socket_check
+    mysql
+    -u {{ mysql_root_username }}
+    -p{{ mysql_root_password }}
+    --connect-timeout=10
+    -NBe "SELECT 1"
+  register: mysql_login_check
   changed_when: false
   failed_when: false
+  no_log: true
 
 - name: Disallow root login remotely
   community.mysql.mysql_user:
-    name: "{{ mysql_root_username }}"
-    host: "%"
-    state: absent
-    login_unix_socket: "{{ mysql_socket }}"
-  when: mysql_socket_check.rc == 0
+    name:           "{{ mysql_root_username }}"
+    host:           "%"
+    state:          absent
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[ha_master_group]
 
-- name: Get list of hosts for the anonymous user.
-  ansible.builtin.command: mysql -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+- name: Get list of hosts for the anonymous user
+  ansible.builtin.command: >
+    mysql
+    -u {{ mysql_root_username }}
+    -p{{ mysql_root_password }}
+    --connect-timeout=10
+    -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
   register: mysql_anonymous_hosts
   changed_when: false
-  check_mode: false
-  when: mysql_socket_check.rc == 0
+  no_log: true
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[ha_master_group]
 
-- name: Remove anonymous MySQL users.
-  ansible.builtin.mysql_user:
-    name: ""
-    host: "{{ item }}"
-    state: absent
+- name: Remove anonymous MySQL users
+  community.mysql.mysql_user:
+    name:           ""
+    host:           "{{ item }}"
+    state:          absent
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
   with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
-  when: mysql_socket_check.rc == 0
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[ha_master_group]
 
 - name: Get list of hosts for the root user
   ansible.builtin.command: >
-    mysql -NBe
-    "SELECT Host FROM mysql.user
+    mysql
+    -u {{ mysql_root_username }}
+    -p{{ mysql_root_password }}
+    --connect-timeout=10
+    -NBe "SELECT Host FROM mysql.user
     WHERE User = '{{ mysql_root_username }}'
     ORDER BY (Host='localhost') ASC"
   register: mysql_root_hosts
   changed_when: false
-  check_mode: false
-  when: mysql_socket_check.rc == 0
+  no_log: true
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname not in groups[ha_slave_group]
 
 - name: Ensure root password is set
-  ansible.builtin.shell: >
-    mysql -u root -NBe
-    'ALTER USER "{{ mysql_root_username }}"@"{{ item }}"
-    IDENTIFIED WITH mysql_native_password BY "{{ mysql_root_password }}";'
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - -u
+      - "{{ mysql_root_username }}"
+      - "-p{{ mysql_root_password }}"
+      - --connect-timeout=10
+      - -NBe
+      - >-
+        ALTER USER '{{ mysql_root_username }}'@'{{ item }}'
+        IDENTIFIED WITH caching_sha2_password
+        BY '{{ mysql_root_password }}';
   with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
+  no_log: true
+  changed_when: true
   when:
-    - mysql_socket_check.rc == 0
+    - mysql_login_check.rc == 0
     - mysql_install_packages | bool or mysql_root_password_update
+    - inventory_hostname not in groups[ha_slave_group]

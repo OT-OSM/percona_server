@@ -1,0 +1,20 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=MinIO Object Storage
+Documentation=https://docs.min.io
+After=network.target
+
+[Service]
+User={{ ha_minio_system_user }}
+Group={{ ha_minio_system_user }}
+ExecStart={{ ha_minio_install_path }} server {{ ha_minio_datadir }} \
+  --console-address ":{{ ha_minio_console_port }}" \
+  --address ":{{ ha_minio_port }}"
+Environment="MINIO_ROOT_USER={{ ha_minio_root_user }}"
+Environment="MINIO_ROOT_PASSWORD={{ ha_minio_root_password }}"
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

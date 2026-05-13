@@ -1,0 +1,360 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# post-failover-action.sh
+# Called by orchestrator PostMasterFailoverProcesses
+# Uses MySQL client only — no SSH required (LDC environment)
+# For GTID gap: alerts team to run Semaphore restore playbook
+#
+# Usage: post-failover-action.sh {failedHost} {successorHost}
+
+FAILED_HOST=$1
+NEW_MASTER=$2
+
+# Credentials
+REPL_USER="{{ ha_replication_user.name }}"
+REPL_PASS="{{ ha_replication_user.password }}"
+ORC_USER="{{ ha_orchestrator_topology_user.name }}"
+ORC_PASS="{{ ha_orchestrator_topology_user.password }}"
+PROXYSQL_ADMIN_USER="{{ ha_proxysql_admin_user }}"
+PROXYSQL_ADMIN_PASS="{{ ha_proxysql_admin_password }}"
+PROXYSQL_HOST="127.0.0.1"
+PROXYSQL_PORT="{{ ha_proxysql_admin_port }}"
+MYSQL_PORT="{{ mysql_port }}"
+
+# MinIO
+MINIO_ALIAS="{{ ha_minio_alias }}"
+MINIO_BUCKET="{{ ha_minio_bucket }}"
+MINIO_RESYNC_FOLDER="{{ ha_minio_resync_folder }}"
+MC="{{ ha_mc_install_path }}"
+
+# Semaphore
+SEMAPHORE_URL="{{ ha_semaphore_url }}"
+SEMAPHORE_RESTORE_TEMPLATE="{{ ha_semaphore_restore_template }}"
+
+# Settings
+LOG="{{ ha_orchestrator_log_file }}"
+ALERT_LOG="{{ ha_orchestrator_alert_log }}"
+MAX_WAIT="{{ ha_failover_max_restart_wait }}"
+CHECK_INTERVAL=10
+LOCKFILE="/tmp/post-failover-${FAILED_HOST}.lock"
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" | tee -a $LOG
+}
+
+# Prevent duplicate runs
+if [ -f "$LOCKFILE" ]; then
+  log "WARN" "Script already running for $FAILED_HOST - exiting"
+  exit 0
+fi
+touch $LOCKFILE
+trap "rm -f $LOCKFILE" EXIT
+
+# Validate inputs
+if [ -z "$FAILED_HOST" ] || [ -z "$NEW_MASTER" ]; then
+  log "ERROR" "Usage: $0 {failedHost} {successorHost}"
+  exit 1
+fi
+
+# ── Update ProxySQL immediately ───────────────────────────────────────────────
+update_proxysql() {
+  log "INFO" "Updating ProxySQL: $FAILED_HOST HG{{ ha_proxysql_reader_hostgroup }} | $NEW_MASTER HG{{ ha_proxysql_writer_hostgroup }}"
+  mysql \
+    -u $PROXYSQL_ADMIN_USER \
+    -p$PROXYSQL_ADMIN_PASS \
+    -h $PROXYSQL_HOST \
+    -P $PROXYSQL_PORT -e "
+    UPDATE mysql_servers
+      SET hostgroup_id={{ ha_proxysql_reader_hostgroup }}, status='ONLINE'
+      WHERE hostname='$FAILED_HOST';
+    UPDATE mysql_servers
+      SET hostgroup_id={{ ha_proxysql_writer_hostgroup }}, status='ONLINE'
+      WHERE hostname='$NEW_MASTER';
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;
+  " >> $LOG 2>&1
+  if [ $? -eq 0 ]; then
+    log "INFO" "ProxySQL updated successfully"
+  else
+    log "ERROR" "ProxySQL update failed — manual update required"
+    notify_team "WARNING: ProxySQL update failed after failover"
+  fi
+}
+
+# ── Check MySQL reachable ─────────────────────────────────────────────────────
+check_mysql_running() {
+  local host=$1
+  mysql \
+    -u $ORC_USER \
+    -p$ORC_PASS \
+    -h $host \
+    -P $MYSQL_PORT \
+    --connect-timeout=10 \
+    -e "SELECT 1;" > /dev/null 2>&1
+  return $?
+}
+
+# ── Force read_only ───────────────────────────────────────────────────────────
+force_read_only() {
+  local host=$1
+  mysql \
+    -u $ORC_USER \
+    -p$ORC_PASS \
+    -h $host \
+    -P $MYSQL_PORT \
+    --connect-timeout=10 \
+    -e "SET GLOBAL read_only=ON;
+        SET GLOBAL super_read_only=ON;" >> $LOG 2>&1
+}
+
+# ── Simple rejoin ─────────────────────────────────────────────────────────────
+simple_rejoin() {
+  local host=$1
+  local new_master=$2
+  log "INFO" "Performing simple CHANGE MASTER TO: $host -> $new_master"
+  mysql \
+    -u $ORC_USER \
+    -p$ORC_PASS \
+    -h $host \
+    -P $MYSQL_PORT \
+    --connect-timeout=10 \
+    -e "STOP SLAVE;
+        RESET SLAVE ALL;
+        CHANGE MASTER TO
+          MASTER_HOST='$new_master',
+          MASTER_USER='$REPL_USER',
+          MASTER_PASSWORD='$REPL_PASS',
+          MASTER_PORT=$MYSQL_PORT,
+          MASTER_AUTO_POSITION=1;
+        START SLAVE;" >> $LOG 2>&1
+  return $?
+}
+
+# ── Rejoin as slave ───────────────────────────────────────────────────────────
+rejoin_as_slave() {
+  local host=$1
+  local new_master=$2
+
+  log "INFO" "Rejoining $host as slave of $new_master"
+  force_read_only $host
+
+  # Check if already replicating correctly
+  CURRENT_MASTER=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $host -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SHOW SLAVE STATUS\G" 2>/dev/null \
+    | grep "Master_Host" | awk '{print $2}')
+
+  IO_RUNNING=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $host -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SHOW SLAVE STATUS\G" 2>/dev/null \
+    | grep "Slave_IO_Running" | awk '{print $2}')
+
+  if [ "$CURRENT_MASTER" = "$new_master" ] && \
+     [ "$IO_RUNNING" = "Yes" ]; then
+    log "INFO" "Already replicating from $new_master — no rejoin needed"
+    return 0
+  fi
+
+  # Get GTID info
+  OLD_GTID=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $host -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT @@gtid_executed;" 2>/dev/null)
+
+  NEW_PURGED=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT @@gtid_purged;" 2>/dev/null)
+
+  log "INFO" "Old master GTID:   $OLD_GTID"
+  log "INFO" "New master purged: $NEW_PURGED"
+
+  # No purged GTIDs on new master — safe simple rejoin
+  if [ -z "$NEW_PURGED" ]; then
+    log "INFO" "New master has no purged GTIDs — safe simple rejoin"
+    simple_rejoin $host $new_master
+    return $?
+  fi
+
+  # Check actual GTID gap
+  GAP=$(mysql -u $ORC_USER -p$ORC_PASS \
+    -h $new_master -P $MYSQL_PORT --connect-timeout=10 \
+    -se "SELECT GTID_SUBTRACT('$NEW_PURGED','$OLD_GTID');" \
+    2>/dev/null)
+
+  log "INFO" "GTID gap: '$GAP'"
+
+  if [ -z "$GAP" ]; then
+    log "INFO" "No GTID gap — performing simple rejoin"
+    simple_rejoin $host $new_master
+    return $?
+  else
+    log "WARN" "GTID gap detected: $GAP"
+    log "WARN" "Old master missing transactions — xtrabackup resync required"
+    log "ACTION" "================================================"
+    log "ACTION" "MANUAL RESTORE REQUIRED:"
+    log "ACTION" "1. Open Semaphore: $SEMAPHORE_URL"
+    log "ACTION" "2. Run template:   $SEMAPHORE_RESTORE_TEMPLATE"
+    log "ACTION" "3. Set variables:"
+    log "ACTION" "   restore_source_host: $new_master"
+    log "ACTION" "   restore_target_host: $host"
+    log "ACTION" "================================================"
+    notify_team "GTID gap on $host — Open $SEMAPHORE_URL and run $SEMAPHORE_RESTORE_TEMPLATE. Source: $new_master Target: $host"
+    return 1
+  fi
+}
+
+# ── Verify replication ────────────────────────────────────────────────────────
+verify_replication() {
+  local host=$1
+  local attempts=0
+  local max=6
+
+  log "INFO" "Verifying replication on $host"
+  while [ $attempts -lt $max ]; do
+    IO=$(mysql -u $ORC_USER -p$ORC_PASS \
+      -h $host -P $MYSQL_PORT --connect-timeout=10 \
+      -se "SHOW SLAVE STATUS\G" 2>/dev/null \
+      | grep "Slave_IO_Running" | awk '{print $2}')
+
+    SQL=$(mysql -u $ORC_USER -p$ORC_PASS \
+      -h $host -P $MYSQL_PORT --connect-timeout=10 \
+      -se "SHOW SLAVE STATUS\G" 2>/dev/null \
+      | grep "Slave_SQL_Running:" | awk '{print $2}')
+
+    LAG=$(mysql -u $ORC_USER -p$ORC_PASS \
+      -h $host -P $MYSQL_PORT --connect-timeout=10 \
+      -se "SHOW SLAVE STATUS\G" 2>/dev/null \
+      | grep "Seconds_Behind_Master" | awk '{print $2}')
+
+    log "INFO" "Check $((attempts+1))/$max: IO=$IO SQL=$SQL Lag=${LAG}s"
+
+    if [ "$IO" = "Yes" ] && [ "$SQL" = "Yes" ]; then
+      log "INFO" "Replication verified: IO=Yes SQL=Yes Lag=${LAG}s"
+      return 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 10
+  done
+
+  log "ERROR" "Replication failed to start after $max attempts"
+  return 1
+}
+
+# ── Add back to ProxySQL reader ───────────────────────────────────────────────
+add_to_proxysql_reader() {
+  local host=$1
+  log "INFO" "Adding $host to ProxySQL HG{{ ha_proxysql_reader_hostgroup }}"
+  mysql \
+    -u $PROXYSQL_ADMIN_USER \
+    -p$PROXYSQL_ADMIN_PASS \
+    -h $PROXYSQL_HOST \
+    -P $PROXYSQL_PORT -e "
+    UPDATE mysql_servers
+      SET hostgroup_id={{ ha_proxysql_reader_hostgroup }}, status='ONLINE'
+      WHERE hostname='$host';
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;
+  " >> $LOG 2>&1
+  if [ $? -eq 0 ]; then
+    log "INFO" "$host added to ProxySQL HG{{ ha_proxysql_reader_hostgroup }} successfully"
+  else
+    log "ERROR" "$host ProxySQL update failed — add manually"
+  fi
+}
+
+# ── Rediscover in orchestrator ────────────────────────────────────────────────
+rediscover() {
+  local host=$1
+  log "INFO" "Rediscovering $host in orchestrator"
+  RESULT=$(curl -s \
+    "http://localhost:{{ ha_orchestrator_port }}/api/discover/$host/$MYSQL_PORT")
+  log "INFO" "Rediscovery: $(echo $RESULT | python3 -m json.tool 2>/dev/null \
+    | grep Message || echo $RESULT)"
+}
+
+# ── Notify team ───────────────────────────────────────────────────────────────
+notify_team() {
+  local message=$1
+  log "ALERT" "$message"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') ALERT: $message" >> $ALERT_LOG
+{% if ha_slack_webhook_url != '' %}
+  curl -s -X POST {{ ha_slack_webhook_url }} \
+    -H 'Content-type: application/json' \
+    -d "{\"text\":\"MySQL HA Alert: $message\"}" > /dev/null 2>&1
+{% endif %}
+{% if ha_alert_email != '' %}
+  echo "$message" | mail -s "MySQL Failover Alert" {{ ha_alert_email }} > /dev/null 2>&1
+{% endif %}
+}
+
+# ════════════════════════════════════════════════════════════════════════════ #
+# MAIN FLOW
+# ════════════════════════════════════════════════════════════════════════════ #
+log "INFO" "================================================"
+log "INFO" "Post-failover action started"
+log "INFO" "Failed host:  $FAILED_HOST"
+log "INFO" "New master:   $NEW_MASTER"
+log "INFO" "================================================"
+
+# Step 1: Update ProxySQL immediately — synchronous
+update_proxysql
+
+# Run rest in background — do not block orchestrator
+(
+  elapsed=0
+
+  # Step 2: Wait for failed host MySQL
+  log "INFO" "Waiting for MySQL on $FAILED_HOST (max ${MAX_WAIT}s)"
+  while [ $elapsed -lt $MAX_WAIT ]; do
+    if check_mysql_running $FAILED_HOST; then
+      log "INFO" "MySQL reachable on $FAILED_HOST after ${elapsed}s"
+      break
+    fi
+    sleep $CHECK_INTERVAL
+    elapsed=$((elapsed + CHECK_INTERVAL))
+    log "INFO" "Waiting... ${elapsed}s / ${MAX_WAIT}s"
+  done
+
+  if ! check_mysql_running $FAILED_HOST; then
+    log "ERROR" "MySQL on $FAILED_HOST not reachable after ${MAX_WAIT}s"
+    log "ACTION" "Manual intervention required"
+    notify_team "CRITICAL: MySQL on $FAILED_HOST unreachable after ${MAX_WAIT}s"
+    exit 1
+  fi
+
+  # Step 3: Rejoin as slave
+  if rejoin_as_slave $FAILED_HOST $NEW_MASTER; then
+
+    sleep 5
+
+    # Step 4: Verify replication
+    if verify_replication $FAILED_HOST; then
+
+      # Step 5: Add to ProxySQL reader
+      add_to_proxysql_reader $FAILED_HOST
+
+      # Step 6: Rediscover in orchestrator
+      rediscover $FAILED_HOST
+
+      log "INFO" "================================================"
+      log "INFO" "AUTO-REJOIN COMPLETE"
+      log "INFO" "$FAILED_HOST is now slave of $NEW_MASTER"
+      log "INFO" "================================================"
+      notify_team "SUCCESS: $FAILED_HOST auto-rejoined as slave of $NEW_MASTER"
+
+    else
+      log "ERROR" "Replication verification failed on $FAILED_HOST"
+      notify_team "ERROR: $FAILED_HOST replication failed — manual check needed"
+    fi
+
+  else
+    log "ERROR" "Rejoin failed on $FAILED_HOST — GTID gap or other issue"
+    notify_team "ERROR: $FAILED_HOST rejoin failed — check $LOG for details"
+  fi
+
+) &
+
+BGPID=$!
+log "INFO" "Background process started (PID: $BGPID)"
+log "INFO" "Monitor: tail -f $LOG"
+exit 0

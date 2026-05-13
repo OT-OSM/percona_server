@@ -1,7 +1,7 @@
 ---
 galaxy_info:
-  author: Abhishek Vishwakarma
-  description: Install and configure Percona Server 8.0 or greater with CIS best practices
+  author: Rajnish Sharma
+  description: Install and configure Percona Server with HA using Orchestrator, ProxySQL and MinIO
   company: Opstree Solutions
   license: GPLv3
   min_ansible_version: "2.12"
@@ -19,9 +19,12 @@ galaxy_info:
     - otosm
     - percona
     - mysql
+    - orchestrator
+    - proxysql
+    - minio
+    - ha
     - cisbenchmark
     - database
-    - devsecops
     - devops
 
 dependencies: []

@@ -1,0 +1,79 @@
+# =============================================================================
+# HA Replication and Orchestrator Users Setup
+# Runs on master only — grants replicate to slave automatically via binlog
+# Uses login_user + login_password (no socket auth — caching_sha2_password)
+# =============================================================================
+
+- name: Create HA replication user on master
+  community.mysql.mysql_user:
+    name:           "{{ ha_replication_user.name }}"
+    host:           "%"
+    password:       "{{ ha_replication_user.password }}"
+    priv:           "{{ ha_replication_user.priv }}"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Grant privileges to orchestrator topology user
+  community.mysql.mysql_user:
+    name:     "{{ ha_orchestrator_topology_user.name }}"
+    host:     "%"
+    password: "{{ ha_orchestrator_topology_user.password }}"
+    priv: >-
+      *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
+      sys.*:SELECT/
+      mysql.slave_master_info:SELECT/
+      performance_schema.replication_applier_status_by_worker:SELECT/
+      performance_schema.replication_group_members:SELECT/
+      performance_schema.replication_group_member_stats:SELECT
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    append_privs:   true
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Create orchestrator backend database
+  community.mysql.mysql_db:
+    name:           "{{ ha_orchestrator_backend_user.database }}"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Create orchestrator backend DB user
+  community.mysql.mysql_user:
+    name:           "{{ ha_orchestrator_backend_user.name }}"
+    host:           "127.0.0.1"
+    password:       "{{ ha_orchestrator_backend_user.password }}"
+    priv:           "{{ ha_orchestrator_backend_user.database }}.*:ALL"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Create application user
+  community.mysql.mysql_user:
+    name:     "{{ ha_app_user.name }}"
+    host:     "{{ ha_app_user.host }}"
+    password: "{{ ha_app_user.password }}"
+    priv:     "*.*:SELECT,INSERT,UPDATE,DELETE"
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+    state: present
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]
+
+- name: Set mysql_native_password for app user
+  community.mysql.mysql_query:
+    query: >
+      ALTER USER '{{ ha_app_user.name }}'@'{{ ha_app_user.host }}'
+      IDENTIFIED WITH mysql_native_password
+      BY '{{ ha_app_user.password }}'
+    login_user:     "{{ mysql_root_username }}"
+    login_password: "{{ mysql_root_password }}"
+  no_log: true
+  when: inventory_hostname in groups[ha_master_group]

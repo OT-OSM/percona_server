@@ -1,8 +1,8 @@
 ---
 - name: Restart percona service
   ansible.builtin.service:
-    name: "{{ mysql_daemon }}"
-    state: restarted
+    name:    "{{ mysql_daemon }}"
+    state:   restarted
     enabled: true
   listen: restart_percona
 
@@ -10,3 +10,17 @@
   ansible.builtin.systemd:
     daemon_reload: true
   listen: Reload systemd
+
+- name: Restart orchestrator service
+  ansible.builtin.service:
+    name:    "{{ orchestrator_service_name }}"
+    state:   restarted
+    enabled: true
+  listen: restart_orchestrator
+
+- name: Restart proxysql service
+  ansible.builtin.service:
+    name:    "{{ proxysql_service_name }}"
+    state:   restarted
+    enabled: true
+  listen: restart_proxysql

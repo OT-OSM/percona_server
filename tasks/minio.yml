@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# MinIO Client (mc) Configuration
+# Installs mc and configures alias pointing to company MinIO
+# Uses --insecure for self-signed SSL certificate
+# S3 API port: 9000 (console port 8443 is web UI only)
+# mc is installed on ALL nodes — needed for backup and restore
+# Folder structure (YYYY-MM-DD/day/) is created by backup scripts
+# Only failover-resync/ is pre-created here as it is not backup-managed
+# =============================================================================
+
+- name: Check if mc client already exists
+  ansible.builtin.stat:
+    path: "{{ ha_mc_install_path }}"
+  register: mc_binary_stat
+
+- name: Download MinIO client (mc)
+  ansible.builtin.get_url:
+    url:   "https://dl.min.io/client/mc/release/linux-amd64/mc"
+    dest:  "{{ ha_mc_install_path }}"
+    mode:  "0755"
+    owner: root
+    group: root
+  when: not mc_binary_stat.stat.exists
+
+- name: Configure mc alias for company MinIO
+  ansible.builtin.command: >
+    {{ ha_mc_install_path }} alias set {{ ha_minio_alias }}
+    {{ ha_minio_endpoint }}
+    {{ ha_minio_root_user }}
+    {{ ha_minio_root_password }}
+    --insecure
+  changed_when: false
+  no_log: false
+
+- name: Verify MinIO connection
+  ansible.builtin.command: >
+    {{ ha_mc_install_path }} ls {{ ha_minio_alias }}/ --insecure
+  changed_when: false
+  register: minio_check
+  failed_when: minio_check.rc != 0
+
+- name: Ensure MinIO bucket exists
+  ansible.builtin.command: >
+    {{ ha_mc_install_path }} mb --ignore-existing
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}
+    --insecure
+  changed_when: false
+  when: minio_configure | bool
+
+- name: Create failover-resync folder in MinIO bucket
+  ansible.builtin.command: >
+    {{ ha_mc_install_path }} mb --ignore-existing
+    {{ ha_minio_alias }}/{{ ha_minio_bucket }}/{{ ha_minio_resync_folder }}
+    --insecure
+  changed_when: false
+  when: minio_configure | bool

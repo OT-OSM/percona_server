@@ -1,117 +1,457 @@
 ---
-# Set this to `true` to forcibly update the root password.
+# =============================================================================
+# Percona Server Role — Default Variables
+# =============================================================================
+#
+#   Sensitive values (passwords, endpoints) MUST be overridden via:
+#   - Ansible Vault (group_vars/vault.yml)
+#   - Semaphore Environment Variables
+#   - vars/vars.yml in playbook directory
+#
+#   Defaults here are for REFERENCE ONLY — not for production use.
+# =============================================================================
+
+# =====================================================
+# FEATURE TOGGLES — Percona Server
+# =====================================================
+replication:                false
+backup:                     false
+database_creation:          true
+users_creation:             true
+mysql_metrics_enabled:      true
 mysql_root_password_update: false
+mysql_install_packages:     true
 
-# MySQL connection settings.
-mysql_port: "3306"
-mysql_bind_address: '0.0.0.0'
+# =====================================================
+# FEATURE TOGGLES — HA Components
+# Set per play in playbook.yml — do not change here
+# =====================================================
+orchestrator_install:        false
+orchestrator_configure:      false
+proxysql_install:            false
+proxysql_configure:          false
+minio_configure:             false
+configure_replication_users: false
+deploy_failover_script:      false
+deploy_backup_scripts:       false
+setup_backup_cron:           false
+mysql_backup_server:         false
+ha_pmm_enabled:              false
+
+# =====================================================
+# INVENTORY GROUP NAMES
+# Override to match your inventory group names
+# =====================================================
+ha_master_group:       "percona-master"
+ha_slave_group:        "percona-slave"
+ha_orchestrator_group: "percona-orchestrator"
+
+# =====================================================
+# MYSQL — CONNECTION & GENERAL
+# =====================================================
+mysql_port:              "3306"
+mysql_bind_address:      "0.0.0.0"
 mysql_skip_name_resolve: false
-mysql_datadir: /var/lib/mysql
-mysql_sql_mode: 'STRICT_ALL_TABLES'
+mysql_datadir:           /var/lib/mysql
+mysql_socket:            /var/run/mysqld/mysqld.sock
+mysql_sql_mode:          "STRICT_ALL_TABLES"
 
-# Slow query log settings.
+# =====================================================
+# MYSQL — SERVER IDENTITY
+# Override mysql_server_id per play in playbook.yml
+# Master play: mysql_server_id: "1"
+# Slave play:  mysql_server_id: "2"
+# =====================================================
+mysql_server_id: "1"
+
+# =====================================================
+# MYSQL — ROOT CREDENTIALS
+# Override via Ansible Vault or Semaphore env var
+# VAULT_MYSQL_ROOT_PASSWORD
+# =====================================================
+mysql_root_username: "root"
+mysql_root_password: "changeme"
+
+# =====================================================
+# MYSQL — REPLICATION & BINLOG
+# =====================================================
+mysql_gtid_mode:                  true
+mysql_binlog_format:              "ROW"
+mysql_max_binlog_size:            "100M"
+mysql_binlog_expire_logs_seconds: 604800   # 7 days — prevents error 1236
+
+# =====================================================
+# MYSQL — SLOW QUERY LOG
+# =====================================================
 mysql_slow_query_log_enabled: true
-mysql_slow_query_time: "2"
-# The following variable has a default value depending on operating system.
-mysql_slow_query_log_file: /var/log/mysql-slow.log
+mysql_slow_query_time:        "2"
+mysql_slow_query_log_file:    /var/log/mysql-slow.log
 
-# Memory settings (default values optimized for ~512MB RAM).
-mysql_key_buffer_size: "256M"
-mysql_max_allowed_packet: "64M"
-mysql_table_open_cache: "256"
-mysql_sort_buffer_size: "1M"
-mysql_read_buffer_size: "1M"
-mysql_read_rnd_buffer_size: "4M"
-mysql_myisam_sort_buffer_size: "64M"
-mysql_thread_cache_size: "8"
-mysql_query_cache_type: "0"
-mysql_query_cache_size: "16M"
-mysql_query_cache_limit: "1M"
-mysql_max_connections: "151"
-mysql_tmp_table_size: "16M"
-mysql_max_heap_table_size: "16M"
-mysql_group_concat_max_len: "1024"
-mysql_join_buffer_size: "262144"
+# =====================================================
+# MYSQL — MEMORY SETTINGS
+# Auto-calculated based on system RAM (ansible_memtotal_mb)
+# Falls back to safe defaults if facts unavailable
+#
+# T-Shirt sizing reference:
+#   S  (~2GB  RAM) → dev/test
+#   M  (~4GB  RAM) → staging
+#   L  (~8GB  RAM) → production
+#   XL (~16GB RAM) → high traffic
+#
+# Override in vars/vars.yml if auto-calc not suitable:
+#   mysql_innodb_buffer_pool_size: "4G"
+#   mysql_max_connections:         "500"
+# =====================================================
 
-# Other settings.
-mysql_lower_case_table_names: "0"
-mysql_wait_timeout: "28800"
-mysql_event_scheduler_state: "OFF"
+# InnoDB buffer pool = 70% of total RAM (min 128M)
+mysql_innodb_buffer_pool_size: >-
+  {{ [((ansible_memtotal_mb | default(512)) * 0.70) | int, 128] | max }}M
 
-# InnoDB settings.
-mysql_innodb_file_per_table: "1"
-# Set .._buffer_pool_size up to 80% of RAM but beware of setting too high.
-mysql_innodb_buffer_pool_size: "256M"
-# Set .._log_file_size to 25% of buffer pool size.
-mysql_innodb_log_file_size: "64M"
-mysql_innodb_log_buffer_size: "8M"
-mysql_innodb_flush_log_at_trx_commit: "1"
-mysql_innodb_lock_wait_timeout: "50"
+# InnoDB log file = 25% of buffer pool (min 64M)
+mysql_innodb_log_file_size: >-
+  {{ [((ansible_memtotal_mb | default(512)) * 0.175) | int, 64] | max }}M
 
-# These settings require MySQL > 5.5.
-mysql_innodb_large_prefix: "1"
-mysql_innodb_file_format: "barracuda"
+# InnoDB log buffer = 2% of RAM (min 8M)
+mysql_innodb_log_buffer_size: >-
+  {{ [((ansible_memtotal_mb | default(512)) * 0.02) | int, 8] | max }}M
 
-# mysqldump settings.
+# Max connections = 20% of RAM in MB (min 50)
+mysql_max_connections: >-
+  {{ [((ansible_memtotal_mb | default(512)) * 0.20) | int, 50] | max }}
+
+# Thread cache = connections/4 (min 8, max 64)
+mysql_thread_cache_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 8] | max, 64] | min }}
+
+# Tmp table size = 5% of RAM (min 16M, max 256M)
+mysql_tmp_table_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 16] | max, 256] | min }}M
+
+# Max heap = same as tmp table size
+mysql_max_heap_table_size: "{{ mysql_tmp_table_size }}"
+
+# Sort buffer = 1% of RAM (min 1M, max 16M)
+mysql_sort_buffer_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.01) | int, 1] | max, 16] | min }}M
+
+# Read buffer = 0.5% of RAM (min 1M, max 8M)
+mysql_read_buffer_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.005) | int, 1] | max, 8] | min }}M
+
+# Read RND buffer = 1% of RAM (min 4M, max 32M)
+mysql_read_rnd_buffer_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.01) | int, 4] | max, 32] | min }}M
+
+# Join buffer = 1% of RAM in bytes (min 256K, max 8M)
+mysql_join_buffer_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.01 * 1024 * 1024) | int, 262144] | max, 8388608] | min }}
+
+# Table open cache = max_connections * 2 (min 256)
+mysql_table_open_cache: >-
+  {{ [mysql_max_connections | int * 2, 256] | max }}
+
+# Key buffer (MyISAM) = 5% of RAM (min 64M, max 256M)
+mysql_key_buffer_size: >-
+  {{ [[((ansible_memtotal_mb | default(512)) * 0.05) | int, 64] | max, 256] | min }}M
+
+# =====================================================
+# MYSQL — FIXED MEMORY SETTINGS
+# Not RAM dependent — safe for all sizes
+# =====================================================
+mysql_max_allowed_packet:           "64M"
+mysql_myisam_sort_buffer_size:      "64M"
+mysql_group_concat_max_len:         "1024"
 mysql_mysqldump_max_allowed_packet: "64M"
 
-# Logging settings.
+# =====================================================
+# MYSQL — OTHER SETTINGS
+# =====================================================
+mysql_lower_case_table_names: "0"
+mysql_wait_timeout:           "28800"
+mysql_event_scheduler_state:  "OFF"
+
+# =====================================================
+# MYSQL — INNODB SETTINGS (FIXED)
+# =====================================================
+mysql_innodb_file_per_table:          "1"
+mysql_innodb_flush_log_at_trx_commit: "1"
+mysql_innodb_lock_wait_timeout:       "50"
+
+# =====================================================
+# MYSQL — LOGGING
+# =====================================================
 mysql_log: ""
-# The following variables have a default value depending on operating system.
-# mysql_log_error: /var/log/mysql/mysql.err
+# mysql_log_error:  /var/log/mysql/mysql.err
 # mysql_syslog_tag: mysql
 
+# =====================================================
+# MYSQL — CONFIG INCLUDE FILES
+# =====================================================
 mysql_config_include_files: []
-#  - src: path/relative/to/playbook/file.cnf
-#  - { src: path/relative/to/playbook/anotherfile.cnf, force: yes }
+mysql_config_include_dir:   /etc/mysql/conf.d
 
-# Directory for additional MySQL config fragments (used with mysql_config_include_files).
-mysql_config_include_dir: /etc/mysql/conf.d
-
-## Databases.
-# Override in group_vars / host_vars. Left empty to avoid accidental creation.
+# =====================================================
+# MYSQL — DATABASES & USERS
+# Override in group_vars or vars/vars.yml
+# =====================================================
 mysql_databases: []
-#  - name: myapp_db
-#    collation: utf8_general_ci
-#    encoding: utf8
-#    replicate: 1
-
-# Users.
-# Override in group_vars / host_vars. Passwords should come from Ansible Vault.
 mysql_users:
- - name: mysqld_exporter
-   host: "localhost"
-   password: "VaultThis@Password!123"
-   priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
-#  - name: myapp_user
-#    host: "localhost"
-#    password: "VaultThis@Password!123"
-#    priv: "myapp_db.*:ALL"
+  - name:     mysqld_exporter
+    host:     "localhost"
+    password: "{{ mysql_exporter_db_password }}"
+    priv:     "*.*:PROCESS,REPLICATION CLIENT,SELECT"
 
-# MySQL root credentials.
-# IMPORTANT: Override this via Ansible Vault in group_vars/host_vars!
-mysql_root_password: "N0Tweak$_@123!"
-
-# Replication settings (replication is only enabled if replication: true).
-mysql_server_id: "1"
-mysql_max_binlog_size: "100M"
-mysql_binlog_format: "MIXED"
-mysql_expire_logs_days: "10"
-
-# Replication user credentials.
-# IMPORTANT: Override password via Ansible Vault!
+# =====================================================
+# MYSQL — LEGACY REPLICATION USER (non-HA)
+# =====================================================
 mysql_replication_user:
-  name: slave
-  password: "slaveMaster@123!"
+  name:     "slave"
+  password: "changeme"
 
-# Backup user credentials.
-# IMPORTANT: Override password via Ansible Vault!
 mysql_backup_user:
-  name: backup
-  password: "backUpMaster@123!"
+  name:     "backup"
+  password: "changeme"
 
-# mysqld_exporter toggle and settings.
-mysql_metrics_enabled: true
-mysql_exporter_version: "0.15.1"
-mysql_exporter_user: mysqld_exporter
-mysql_exporter_port: 9104
+# =====================================================
+# MYSQLD_EXPORTER — PROMETHEUS METRICS
+# Override mysql_exporter_db_password via Vault
+# =====================================================
+mysql_exporter_version:     "0.15.1"
+mysql_exporter_user:        mysqld_exporter
+mysql_exporter_port:        9104
+mysql_exporter_db_user:     mysqld_exporter
+mysql_exporter_db_password: "changeme"
+
+# =============================================================================
+# HA — REPLICATION USER
+# Override password via: VAULT_REPL_PASSWORD
+# =============================================================================
+ha_replication_user:
+  name:     "repl"
+  password: "changeme"
+  priv:     "*.*:REPLICATION SLAVE"
+
+# =============================================================================
+# HA — ORCHESTRATOR TOPOLOGY USER
+# Override password via: VAULT_ORC_PASSWORD
+# =============================================================================
+ha_orchestrator_topology_user:
+  name:     "orchestrator"
+  password: "changeme"
+
+# =============================================================================
+# HA — ORCHESTRATOR BACKEND DB USER
+# Override password via: VAULT_ORC_SRV_PASSWORD
+# =============================================================================
+ha_orchestrator_backend_user:
+  name:     "orchestrator_srv"
+  password: "changeme"
+  database: "orchestrator"
+
+# =============================================================================
+# HA — APPLICATION USER (ProxySQL)
+# Override password via: VAULT_APP_PASSWORD
+# =============================================================================
+ha_app_user:
+  name:                   "appuser"
+  password:               "changeme"
+  host:                   "%"
+  default_hostgroup:      10
+  transaction_persistent: 1
+  max_connections:        100
+  active:                 1
+
+# =============================================================================
+# HA — ORCHESTRATOR SETTINGS
+# =============================================================================
+ha_orchestrator_version:      "3.2.6"
+ha_orchestrator_port:         3000
+ha_orchestrator_install_path: "/usr/local/orchestrator"
+ha_orchestrator_config_file:  "/etc/orchestrator.conf.json"
+ha_orchestrator_log_file:     "/usr/local/orchestrator/failover.log"
+ha_orchestrator_alert_log:    "/usr/local/orchestrator/alerts.log"
+ha_orchestrator_debug:        false
+ha_orchestrator_host:         ""
+
+# =====================================================
+# HA — ORCHESTRATOR POLLING & DETECTION
+# =====================================================
+ha_orchestrator_instance_poll_seconds:              5
+ha_orchestrator_recovery_poll_seconds:              2
+ha_orchestrator_recovery_period_block_seconds:      0
+ha_orchestrator_detection_sampling_size:            5
+ha_orchestrator_connect_timeout_seconds:            5
+ha_orchestrator_read_timeout_seconds:               30
+ha_orchestrator_reasonable_replication_lag_seconds: 10
+ha_orchestrator_max_replicas_to_render:             5
+
+# =====================================================
+# HA — ORCHESTRATOR RECOVERY
+# =====================================================
+ha_orchestrator_recovery_enabled:                    true
+ha_orchestrator_recover_master_filters:              ["*"]
+ha_orchestrator_recover_intermediate_master_filters: ["*"]
+ha_orchestrator_fail_master_if_sql_not_uptodate:     false
+ha_orchestrator_detach_lost_replicas_after_failover: true
+ha_orchestrator_hostname_resolve_method:             "none"
+ha_orchestrator_mysql_hostname_resolve_method:       "none"
+ha_orchestrator_reject_hostname_pattern:             ""
+
+# =============================================================================
+# HA — PROXYSQL SETTINGS
+# Override ha_proxysql_admin_password via: VAULT_PROXYSQL_PASSWORD
+# =============================================================================
+ha_proxysql_version:                "2.5.5"
+ha_proxysql_port:                   6033
+ha_proxysql_admin_port:             6032
+ha_proxysql_admin_user:             "admin"
+ha_proxysql_admin_password:         "changeme"
+ha_proxysql_datadir:                "/var/lib/proxysql"
+ha_proxysql_writer_hostgroup:       10
+ha_proxysql_reader_hostgroup:       20
+ha_proxysql_master_max_connections: 200
+ha_proxysql_slave_max_connections:  100
+ha_proxysql_max_replication_lag:    10
+
+# =====================================================
+# HA — PROXYSQL QUERY RULES (10 production rules)
+# =====================================================
+ha_proxysql_query_rules:
+  - rule_id: 1
+    active: 1
+    match_pattern: "^SELECT.*FOR UPDATE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Locking reads to master"
+  - rule_id: 2
+    active: 1
+    match_pattern: "^SELECT.*LOCK IN SHARE MODE"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Lock share mode to master"
+  - rule_id: 3
+    active: 1
+    match_pattern: "^SELECT.*INTO"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SELECT INTO to master"
+  - rule_id: 4
+    active: 1
+    match_pattern: "^SELECT"
+    destination_hostgroup: "{{ ha_proxysql_reader_hostgroup }}"
+    apply: 1
+    comment: "Regular reads to replicas"
+  - rule_id: 5
+    active: 1
+    match_pattern: "^SHOW"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SHOW commands to master"
+  - rule_id: 6
+    active: 1
+    match_pattern: "^SET"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "SET commands to master"
+  - rule_id: 7
+    active: 1
+    match_pattern: "^BEGIN"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Transactions to master"
+  - rule_id: 8
+    active: 1
+    match_pattern: "^COMMIT"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Commit to master"
+  - rule_id: 9
+    active: 1
+    match_pattern: "^ROLLBACK"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Rollback to master"
+  - rule_id: 10
+    active: 1
+    match_pattern: "^CALL"
+    destination_hostgroup: "{{ ha_proxysql_writer_hostgroup }}"
+    apply: 1
+    comment: "Stored procedures to master"
+
+# =============================================================================
+# HA — MINIO SETTINGS
+# Override endpoint and password via: VAULT_MINIO_PASSWORD
+# =============================================================================
+ha_mc_install_path:     "/usr/local/bin/mc"
+ha_minio_alias:         "companyminio"
+ha_minio_endpoint:      "https://minio.example.com:9000"
+ha_minio_root_user:     "minioadmin"
+ha_minio_root_password: "changeme"
+ha_minio_bucket:        "percona-backup"
+ha_minio_full_folder:   "full"
+ha_minio_inc_folder:    "incremental"
+ha_minio_resync_folder: "failover-resync"
+
+# =====================================================
+# HA — BACKUP SETTINGS
+# =====================================================
+ha_backup_log_file:             "/var/log/mysql-backup.log"
+ha_backup_lsn_file:             "/var/lib/mysql-backup/last_lsn"
+ha_backup_scripts_path:         "/usr/local/bin"
+ha_xtrabackup_parallel:         4
+ha_xtrabackup_compress_threads: 4
+
+# =====================================================
+# HA — BACKUP CRON SCHEDULE
+# =====================================================
+ha_backup_full_cron_minute:  "0"
+ha_backup_full_cron_hour:    "1"
+ha_backup_full_cron_weekday: "0"
+ha_backup_inc_cron_minute:   "0"
+ha_backup_inc_cron_hour:     "1"
+ha_backup_inc_cron_weekday:  "1-6"
+
+# =====================================================
+# HA — BACKUP RETENTION POLICY
+# =====================================================
+ha_backup_full_retention_days: 30
+ha_backup_inc_retention_days:  7
+
+# =============================================================================
+# HA — POST-FAILOVER SCRIPT SETTINGS
+# =============================================================================
+ha_failover_ssh_user:         "ubuntu"
+ha_failover_script_path:      "/usr/local/orchestrator/post-failover-action.sh"
+ha_failover_max_restart_wait: 900
+ha_failover_retry_interval:   30
+
+# =====================================================
+# HA — SEMAPHORE INTEGRATION
+# Override ha_semaphore_url per environment
+# =====================================================
+ha_semaphore_url:              "https://semaphore.example.com"
+ha_semaphore_restore_template: "Percona-Restore"
+
+# =====================================================
+# HA — NOTIFICATIONS
+# Leave empty to disable
+# =====================================================
+ha_slack_webhook_url: ""
+ha_alert_email:       ""
+
+# =====================================================
+# HA — MASTER IP
+# Used by post-failover script — override per environment
+# =====================================================
+ha_mysql_master_ip: ""
+
+# =============================================================================
+# HA — PMM MONITORING
+# Override via: VAULT_PMM_PASSWORD
+# =============================================================================
+ha_pmm_enabled:            false
+ha_pmm_server_url:         "https://pmm.example.com"
+ha_pmm_server_url_encoded: "https://admin:changeme@pmm.example.com"
+ha_pmm_username:           "admin"
+ha_pmm_password:           "changeme"
+ha_pmm_client_version:     "3.5.0-7.noble"
