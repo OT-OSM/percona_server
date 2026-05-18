@@ -1,4 +1,4 @@
-```yaml id="svh1sk"
+
 # =============================================================================
 # ProxySQL Configuration
 # Uses mysql client directly on admin port 6032
@@ -215,4 +215,4 @@
   ansible.builtin.debug:
     var: proxysql_backend_validation.stdout_lines
   when: percona_proxysql_configure | bool
-```
+
