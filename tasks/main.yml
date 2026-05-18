@@ -19,33 +19,33 @@
 # ############################# #
 - name: Including tasks to Replication Setup
   ansible.builtin.include_tasks: replication.yml
-  when: replication | default(false)
+  when: percona_replication | default(false)
 
 # ################################### #
 # Percona Backup Server Configuration #
 # ################################### #
 - name: Including tasks to Backup Server Setup
   ansible.builtin.include_tasks: backup.yml
-  when: backup | default(false)
+  when: percona_backup | default(false)
 
 # ############################# #
 # Percona User and DB Operation #
 # ############################# #
 - name: Including tasks to database creation
   ansible.builtin.include_tasks: database.yml
-  when: database_creation | default(true)
+  when: percona_database_creation | default(true)
 
 - name: Including tasks to user creation
   ansible.builtin.include_tasks: users.yml
   tags:
     - create_user
-  when: users_creation | default(true)
+  when: percona_users_creation | default(true)
 
 - name: Including tasks to exporter metrics
   ansible.builtin.include_tasks: mysql_metrics.yml
   tags:
     - mysql_metrics
-  when: mysql_metrics_enabled | default(true)
+  when: percona_metrics_enabled | default(true)
 
 # ################################## #
 # HA — Replication Users Setup       #
@@ -54,35 +54,41 @@
   ansible.builtin.include_tasks: replication_users.yml
   tags:
     - replication_users
-  when: configure_replication_users | default(false)
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
 
 # ################################## #
-# HA — Orchestrator Installation     #
+# HA — Orchestrator                  #
+# Install + Configure                #
+# Runs only on orchestrator group    #
 # ################################## #
-- name: Including tasks for Orchestrator Installation
+- name: Including tasks for Orchestrator Installation and Configuration
   ansible.builtin.include_tasks: orchestrator.yml
-  when: orchestrator_install | default(false)
-
-# ################################## #
-# HA — Orchestrator Configuration    #
-# ################################## #
-- name: Including tasks for Orchestrator Configuration
-  ansible.builtin.include_tasks: orchestrator_configure.yml
-  when: orchestrator_configure | default(false)
+  when:
+    - percona_orchestrator_install | default(false) or
+      percona_orchestrator_configure | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
 
 # ################################## #
 # HA — ProxySQL Installation         #
+# Runs only on orchestrator group    #
 # ################################## #
 - name: Including tasks for ProxySQL Installation
   ansible.builtin.include_tasks: proxysql.yml
-  when: proxysql_install | default(false)
+  when:
+    - percona_proxysql_install | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
 
 # ################################## #
 # HA — ProxySQL Configuration        #
+# Runs only on orchestrator group    #
 # ################################## #
 - name: Including tasks for ProxySQL Configuration
   ansible.builtin.include_tasks: proxysql_configure.yml
-  when: proxysql_configure | default(false)
+  when:
+    - percona_proxysql_configure | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
 
 # ################################## #
 # HA — MinIO Client                  #
@@ -92,19 +98,22 @@
 - name: Including tasks for MinIO Client Installation
   ansible.builtin.include_tasks: minio.yml
   when: >
-    minio_configure | default(false) or
-    deploy_backup_scripts | default(false) or
-    configure_replication_users | default(false) or
-    mysql_backup_server | default(false)
+    percona_minio_configure | default(false) or
+    percona_deploy_backup_scripts | default(false) or
+    percona_configure_replication_users | default(false) or
+    percona_backup_server | default(false)
 
 # ################################## #
 # HA — Post-Failover Script          #
+# Runs only on orchestrator group    #
 # ################################## #
 - name: Including tasks for Post-Failover Script
   ansible.builtin.include_tasks: post_failover_script.yml
   tags:
     - failover_script
-  when: deploy_failover_script | default(false)
+  when:
+    - percona_deploy_failover_script | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
 
 # ################################## #
 # HA — Backup Scripts                #
@@ -116,8 +125,8 @@
   tags:
     - backup_scripts
   when: >
-    deploy_backup_scripts | default(false) or
-    mysql_backup_server | default(false)
+    percona_deploy_backup_scripts | default(false) or
+    percona_backup_server | default(false)
 
 # ################################## #
 # HA — PMM Monitoring Setup          #
@@ -126,4 +135,4 @@
   ansible.builtin.include_tasks: pmm.yml
   tags:
     - pmm
-  when: ha_pmm_enabled | default(false)
+  when: percona_pmm_enabled | default(false)
