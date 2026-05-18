@@ -1,136 +1,228 @@
 {{ ansible_managed | comment }}
 
+# =============================================================================
+# Percona Server Configuration
+# =============================================================================
+
 [client]
-port = {{ mysql_port }}
-socket = {{ mysql_socket }}
+port   = {{ percona_port }}
+socket = {{ percona_socket }}
+
+# =============================================================================
+# MySQL Server
+# =============================================================================
 
 [mysqld]
-port = {{ mysql_port }}
-bind-address = {{ mysql_bind_address }}
-datadir = {{ mysql_datadir }}
-socket = {{ mysql_socket }}
-pid-file = {{ mysql_pid_file }}
-{% if mysql_skip_name_resolve %}
+
+# -----------------------------------------------------------------------------
+# Basic Configuration
+# -----------------------------------------------------------------------------
+
+port         = {{ percona_port }}
+bind-address = {{ percona_bind_address }}
+
+datadir = {{ percona_datadir }}
+socket  = {{ percona_socket }}
+
+pid-file = {{ percona_pid_file | default('/var/run/mysqld/mysqld.pid') }}
+
+{% if percona_skip_name_resolve %}
 skip-name-resolve
 {% endif %}
-{% if mysql_sql_mode %}
-sql_mode = {{ mysql_sql_mode }}
+
+{% if percona_sql_mode %}
+sql_mode = {{ percona_sql_mode }}
 {% endif %}
 
-# CIS hardening
+# -----------------------------------------------------------------------------
+# Security / CIS Hardening
+# -----------------------------------------------------------------------------
+
 skip-grant-tables = OFF
-log-raw = OFF
-local-infile = 0
+log-raw           = OFF
+local-infile      = 0
 skip-symbolic-links = YES
 
-# validate_password is installed as a COMPONENT via secure-installation tasks.
-# Component system variables (validate_password.policy etc.) cannot be set
-# in my.cnf — they must be set at runtime after the component is loaded.
-# See tasks/secure-installation.yml for the INSTALL COMPONENT task.
+# validate_password is installed as COMPONENT via secure-installation tasks.
+# Runtime variables are configured after component installation.
 
-# Logging configuration.
-{% if mysql_log_error == 'syslog' or mysql_log == 'syslog' %}
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+
+{% if percona_log_error == 'syslog' or percona_log == 'syslog' %}
+
 syslog
-syslog-tag = {{ mysql_syslog_tag }}
+syslog-tag = {{ percona_syslog_tag | default('mysql') }}
+
 {% else %}
-{% if mysql_log %}
-log = {{ mysql_log }}
-{% endif %}
-log-error = {{ mysql_log_error }}
+
+{% if percona_log %}
+log = {{ percona_log }}
 {% endif %}
 
-{% if mysql_slow_query_log_enabled %}
-# Slow query log configuration.
+{% if percona_log_error %}
+log-error = {{ percona_log_error }}
+{% endif %}
+
+{% endif %}
+
+# -----------------------------------------------------------------------------
+# Slow Query Log
+# -----------------------------------------------------------------------------
+
+{% if percona_slow_query_log_enabled %}
+
 slow_query_log      = 1
-slow_query_log_file = {{ mysql_slow_query_log_file }}
-long_query_time     = {{ mysql_slow_query_time }}
+slow_query_log_file = {{ percona_slow_query_log_file }}
+long_query_time     = {{ percona_slow_query_time }}
+
 {% endif %}
 
-# server-id must always be set and unique per host.
-# Value is passed via playbook vars (mysql_server_id=1 for master, 2 for slave).
-server-id = {{ mysql_server_id }}
+# -----------------------------------------------------------------------------
+# Server Identity
+# -----------------------------------------------------------------------------
 
-{% if inventory_hostname in groups[ha_master_group] | default([]) %}
-# -------------------------------------------------------
-# Replication - Primary (Master)
-# -------------------------------------------------------
+server-id = {{ percona_server_id }}
+
+# =============================================================================
+# Replication Configuration — MASTER
+# =============================================================================
+
+{% if inventory_hostname in groups[percona_master_group] | default([]) %}
+
 log_bin                    = mysql-bin
 log-bin-index              = mysql-bin.index
-binlog_expire_logs_seconds = {{ mysql_binlog_expire_logs_seconds }}
-max_binlog_size            = {{ mysql_max_binlog_size }}
-binlog_format              = {{ mysql_binlog_format }}
 
-{% if mysql_gtid_mode | default(false) %}
-# GTID Replication — enabled for production/DR
+binlog_expire_logs_seconds = {{ percona_binlog_expire_logs_seconds }}
+max_binlog_size            = {{ percona_max_binlog_size }}
+
+binlog_format = {{ percona_binlog_format }}
+
+{% if percona_gtid_mode | default(false) %}
+
+# GTID Replication
+
 gtid_mode                = ON
 enforce_gtid_consistency = ON
 log_replica_updates      = ON
+
 {% endif %}
 
-{% for db in mysql_databases %}
+{% for db in percona_databases %}
+
 {% if db.replicate | default(1) %}
-binlog_do_db     = {{ db.name }}
+
+binlog_do_db = {{ db.name }}
+
 {% else %}
+
 binlog_ignore_db = {{ db.name }}
+
 {% endif %}
+
 {% endfor %}
 
-{% elif inventory_hostname in groups[ha_slave_group] | default([]) %}
-# -------------------------------------------------------
-# Replication - Replica (Slave)
-# -------------------------------------------------------
-read_only             = ON
-super_read_only       = ON
-relay-log             = relay-bin
-relay-log-index       = relay-bin.index
+# =============================================================================
+# Replication Configuration — REPLICA
+# =============================================================================
 
-{% if mysql_gtid_mode | default(false) %}
-# GTID Replication — enabled for production/DR
+{% elif inventory_hostname in groups[percona_slave_group] | default([]) %}
+
+read_only       = ON
+super_read_only = ON
+
+relay-log       = relay-bin
+relay-log-index = relay-bin.index
+
+{% if percona_gtid_mode | default(false) %}
+
 gtid_mode                = ON
 enforce_gtid_consistency = ON
 log_replica_updates      = ON
-{% endif %}
+
 {% endif %}
 
-# User is ignored when systemd manages the process.
+{% endif %}
+
+# -----------------------------------------------------------------------------
+# MySQL User
+# -----------------------------------------------------------------------------
+
 user = mysql
 
-# Memory settings.
-key_buffer_size         = {{ mysql_key_buffer_size }}
-max_allowed_packet      = {{ mysql_max_allowed_packet }}
-table_open_cache        = {{ mysql_table_open_cache }}
-sort_buffer_size        = {{ mysql_sort_buffer_size }}
-read_buffer_size        = {{ mysql_read_buffer_size }}
-read_rnd_buffer_size    = {{ mysql_read_rnd_buffer_size }}
-myisam_sort_buffer_size = {{ mysql_myisam_sort_buffer_size }}
-thread_cache_size       = {{ mysql_thread_cache_size }}
-max_connections         = {{ mysql_max_connections }}
-tmp_table_size          = {{ mysql_tmp_table_size }}
-max_heap_table_size     = {{ mysql_max_heap_table_size }}
-group_concat_max_len    = {{ mysql_group_concat_max_len }}
-join_buffer_size        = {{ mysql_join_buffer_size }}
+# =============================================================================
+# Memory Settings
+# =============================================================================
 
-# query_cache_* removed entirely in MySQL 8.0 — not conditionally included.
+key_buffer_size         = {{ percona_key_buffer_size }}
 
-# Other settings.
-wait_timeout           = {{ mysql_wait_timeout }}
-lower_case_table_names = {{ mysql_lower_case_table_names }}
-event_scheduler        = {{ mysql_event_scheduler_state }}
+max_allowed_packet      = {{ percona_max_allowed_packet }}
 
-# InnoDB settings.
-# innodb_large_prefix and innodb_file_format were removed in MySQL 8.0 — not included.
-innodb_file_per_table          = {{ mysql_innodb_file_per_table }}
-innodb_buffer_pool_size        = {{ mysql_innodb_buffer_pool_size }}
-innodb_log_file_size           = {{ mysql_innodb_log_file_size }}
-innodb_log_buffer_size         = {{ mysql_innodb_log_buffer_size }}
-innodb_flush_log_at_trx_commit = {{ mysql_innodb_flush_log_at_trx_commit }}
-innodb_lock_wait_timeout       = {{ mysql_innodb_lock_wait_timeout }}
+table_open_cache        = {{ percona_table_open_cache }}
+
+sort_buffer_size        = {{ percona_sort_buffer_size }}
+
+read_buffer_size        = {{ percona_read_buffer_size }}
+
+read_rnd_buffer_size    = {{ percona_read_rnd_buffer_size }}
+
+myisam_sort_buffer_size = {{ percona_myisam_sort_buffer_size }}
+
+thread_cache_size       = {{ percona_thread_cache_size }}
+
+max_connections         = {{ percona_max_connections }}
+
+tmp_table_size          = {{ percona_tmp_table_size }}
+
+max_heap_table_size     = {{ percona_max_heap_table_size }}
+
+group_concat_max_len    = {{ percona_group_concat_max_len }}
+
+join_buffer_size        = {{ percona_join_buffer_size }}
+
+# -----------------------------------------------------------------------------
+# Timeout / Scheduler
+# -----------------------------------------------------------------------------
+
+wait_timeout           = {{ percona_wait_timeout }}
+
+lower_case_table_names = {{ percona_lower_case_table_names }}
+
+event_scheduler        = {{ percona_event_scheduler_state }}
+
+# =============================================================================
+# InnoDB Settings
+# =============================================================================
+
+innodb_file_per_table          = {{ percona_innodb_file_per_table }}
+
+innodb_buffer_pool_size        = {{ percona_innodb_buffer_pool_size }}
+
+innodb_log_file_size           = {{ percona_innodb_log_file_size }}
+
+innodb_log_buffer_size         = {{ percona_innodb_log_buffer_size }}
+
+innodb_flush_log_at_trx_commit = {{ percona_innodb_flush_log_at_trx_commit }}
+
+innodb_lock_wait_timeout       = {{ percona_innodb_lock_wait_timeout }}
+
+# =============================================================================
+# mysqldump
+# =============================================================================
 
 [mysqldump]
-quick
-max_allowed_packet = {{ mysql_mysqldump_max_allowed_packet }}
 
-{% if mysql_config_include_files | length %}
-# Additional config fragments — files must end with .cnf
-!includedir {{ mysql_config_include_dir }}
+quick
+
+max_allowed_packet = {{ percona_mysqldump_max_allowed_packet }}
+
+# =============================================================================
+# Additional Configuration Includes
+# =============================================================================
+
+{% if percona_config_include_files | length %}
+
+!includedir {{ percona_config_include_dir }}
+
 {% endif %}
