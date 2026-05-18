@@ -8,7 +8,7 @@
 #   - Semaphore Environment Variables
 #   - vars/vars.yml in playbook directory
 #
-#   Defaults here are for REFERENCE ONLY — not for production use.
+#   Defaults here are for REFERENCE ONLY
 # =============================================================================
 
 # =====================================================
@@ -312,6 +312,24 @@ percona_ha_proxysql_reader_hostgroup:       20
 percona_ha_proxysql_master_max_connections: 200
 percona_ha_proxysql_slave_max_connections:  100
 percona_ha_proxysql_max_replication_lag:    10
+
+# =============================================================================
+# MYSQL — PID FILE
+# =============================================================================
+percona_pid_file: "/var/run/mysqld/mysqld.pid"
+
+# =============================================================================
+# HA — MINIO SERVER SETTINGS
+# =============================================================================
+percona_ha_minio_system_user: "minio"
+
+percona_ha_minio_install_path: "/usr/local/bin/minio"
+
+percona_ha_minio_datadir: "/data/minio"
+
+percona_ha_minio_port: 9000
+
+percona_ha_minio_console_port: 8443
 
 # =============================================================================
 # HA — PROXYSQL PACKAGE SETTINGS
