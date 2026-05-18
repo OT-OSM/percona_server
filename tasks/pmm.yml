@@ -1,0 +1,165 @@
+# =============================================================================
+# PMM (Percona Monitoring and Management) Setup
+# Registers MySQL nodes with PMM server via REST API
+# No gRPC needed — uses HTTP API registration
+# Runs on master and slave nodes only
+# =============================================================================
+
+# =====================================================
+# SECTION 1 — PMM Client Installation
+# =====================================================
+
+- name: Check if PMM client already installed
+  ansible.builtin.stat:
+    path: /usr/bin/pmm-agent
+  register: pmm_agent_stat
+
+- name: Add Percona repository for PMM client
+  ansible.builtin.apt:
+    deb: "https://repo.percona.com/apt/percona-release_latest.generic_all.deb"
+    state: present
+  when: not pmm_agent_stat.stat.exists
+
+- name: Enable Percona PMM client repository
+  ansible.builtin.command: >
+    percona-release enable pmm-client
+  changed_when: true
+  when: not pmm_agent_stat.stat.exists
+
+- name: Install PMM client
+  ansible.builtin.apt:
+    name:         "pmm2-client={{ percona_ha_pmm_client_version }}"
+    state:        present
+    update_cache: true
+  when: not pmm_agent_stat.stat.exists
+
+# =====================================================
+# SECTION 2 — PMM Agent Configuration
+# =====================================================
+
+- name: Configure PMM agent to connect to PMM server
+  ansible.builtin.command: >
+    pmm-agent setup
+    --config-file=/usr/local/percona/pmm2/config/pmm-agent.yaml
+    --server-address={{ percona_ha_pmm_server_url | regex_replace('https://', '') }}
+    --server-insecure-tls
+    --server-username={{ percona_ha_pmm_username }}
+    --server-password={{ percona_ha_pmm_password }}
+  register: pmm_setup
+  changed_when: pmm_setup.rc == 0
+  failed_when: false
+  no_log: true
+
+- name: Enable and start PMM agent service
+  ansible.builtin.service:
+    name:    pmm-agent
+    state:   started
+    enabled: true
+
+- name: Wait for PMM agent to be ready
+  ansible.builtin.wait_for:
+    timeout: 30
+    delay:   5
+
+# =====================================================
+# SECTION 3 — MySQL Service Registration
+# Register MySQL service with PMM server via REST API
+# =====================================================
+
+- name: Check if MySQL service already registered in PMM
+  ansible.builtin.uri:
+    url:      "{{ percona_ha_pmm_server_url }}/v1/inventory/Services/List"
+    method:   POST
+    body_format: json
+    body:
+      node_id: ""
+    user:     "{{ percona_ha_pmm_username }}"
+    password: "{{ percona_ha_pmm_password }}"
+    validate_certs: false
+    status_code: 200
+  register: pmm_services_list
+  failed_when: false
+  no_log: true
+
+- name: Register MySQL node with PMM server
+  ansible.builtin.uri:
+    url:      "{{ percona_ha_pmm_server_url }}/v1/inventory/Nodes/Add"
+    method:   POST
+    body_format: json
+    body:
+      generic:
+        node_name: "{{ inventory_hostname }}"
+        address:   "{{ ansible_default_ipv4.address }}"
+    user:     "{{ percona_ha_pmm_username }}"
+    password: "{{ percona_ha_pmm_password }}"
+    validate_certs: false
+    status_code: [200, 409]
+  register: pmm_node_register
+  failed_when: false
+  no_log: true
+
+- name: Show PMM node registration result
+  ansible.builtin.debug:
+    msg: "PMM node registration — {{ pmm_node_register.status }}"
+
+- name: Register MySQL service with PMM
+  ansible.builtin.uri:
+    url:      "{{ percona_ha_pmm_server_url }}/v1/inventory/Services/Add"
+    method:   POST
+    body_format: json
+    body:
+      mysql:
+        service_name: "{{ inventory_hostname }}-mysql"
+        node_id:      "{{ pmm_node_register.json.generic.node_id | default('') }}"
+        address:      "{{ ansible_default_ipv4.address }}"
+        port:         "{{ percona_port | int }}"
+    user:     "{{ percona_ha_pmm_username }}"
+    password: "{{ percona_ha_pmm_password }}"
+    validate_certs: false
+    status_code: [200, 409]
+  register: pmm_service_register
+  failed_when: false
+  no_log: true
+
+- name: Show PMM service registration result
+  ansible.builtin.debug:
+    msg: "PMM service registration — {{ pmm_service_register.status }}"
+
+- name: Add mysqld_exporter agent to PMM
+  ansible.builtin.uri:
+    url:      "{{ percona_ha_pmm_server_url }}/v1/inventory/Agents/Add"
+    method:   POST
+    body_format: json
+    body:
+      mysqld_exporter:
+        pmm_agent_id:           "pmm-server"
+        service_id:             "{{ pmm_service_register.json.mysql.service_id | default('') }}"
+        username:               "{{ percona_exporter_db_user }}"
+        password:               "{{ percona_exporter_db_password }}"
+        tls_skip_verify:        true
+        query_examples_enabled: true
+    user:     "{{ percona_ha_pmm_username }}"
+    password: "{{ percona_ha_pmm_password }}"
+    validate_certs: false
+    status_code: [200, 409]
+  register: pmm_agent_register
+  failed_when: false
+  no_log: true
+
+- name: Show PMM agent registration result
+  ansible.builtin.debug:
+    msg: "PMM agent registration — {{ pmm_agent_register.status }}"
+
+# =====================================================
+# SECTION 4 — Verify PMM Registration
+# =====================================================
+
+- name: Verify PMM agent is running
+  ansible.builtin.command: pmm-admin status
+  register: pmm_status
+  changed_when: false
+  failed_when: false
+
+- name: Show PMM status
+  ansible.builtin.debug:
+    msg: "{{ pmm_status.stdout_lines }}"
