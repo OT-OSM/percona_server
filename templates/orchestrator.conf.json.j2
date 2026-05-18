@@ -1,42 +1,75 @@
 {
-  "Debug": {{ ha_orchestrator_debug | lower }},
-  "ListenAddress": ":{{ ha_orchestrator_port }}",
+  "Debug": {{ percona_ha_orchestrator_debug | lower }},
 
-  "MySQLTopologyUser":     "{{ ha_orchestrator_topology_user.name }}",
-  "MySQLTopologyPassword": "{{ ha_orchestrator_topology_user.password }}",
+  "ListenAddress": ":{{ percona_ha_orchestrator_port }}",
 
-  "MySQLOrchestratorHost":     "127.0.0.1",
-  "MySQLOrchestratorPort":     {{ mysql_port }},
-  "MySQLOrchestratorDatabase": "{{ ha_orchestrator_backend_user.database }}",
-  "MySQLOrchestratorUser":     "{{ ha_orchestrator_backend_user.name }}",
-  "MySQLOrchestratorPassword": "{{ ha_orchestrator_backend_user.password }}",
+  "MySQLTopologyUser": "{{ percona_ha_orchestrator_topology_user.name }}",
 
-  "HostnameResolveMethod":        "{{ ha_orchestrator_hostname_resolve_method }}",
-  "MySQLHostnameResolveMethod":   "{{ ha_orchestrator_mysql_hostname_resolve_method }}",
-  "RejectHostnameResolvePattern": "{{ ha_orchestrator_reject_hostname_pattern }}",
+  "MySQLTopologyPassword": "{{ percona_ha_orchestrator_topology_user.password }}",
 
-  "InstancePollSeconds":             {{ ha_orchestrator_instance_poll_seconds }},
-  "DiscoverByShowSlaveHosts":        true,
-  "ReasonableReplicationLagSeconds": {{ ha_orchestrator_reasonable_replication_lag_seconds }},
-  "ReplicationLagQuery":             "",
-  "MaxReplicasToRenderInTopology":   {{ ha_orchestrator_max_replicas_to_render }},
+  "MySQLOrchestratorHost": "127.0.0.1",
 
-  "RecoveryEnabled":                         {{ ha_orchestrator_recovery_enabled | lower }},
-  "RecoveryPollSeconds":                     {{ ha_orchestrator_recovery_poll_seconds }},
-  "RecoveryPeriodBlockSeconds":              {{ ha_orchestrator_recovery_period_block_seconds }},
-  "DetectionSamplingSize":                   {{ ha_orchestrator_detection_sampling_size }},
-  "RecoverMasterClusterFilters":             {{ ha_orchestrator_recover_master_filters | to_json }},
-  "RecoverIntermediateMasterClusterFilters": {{ ha_orchestrator_recover_intermediate_master_filters | to_json }},
+  "MySQLOrchestratorPort": {{ percona_port }},
 
-  "FailMasterPromotionIfSQLThreadNotUpToDate": {{ ha_orchestrator_fail_master_if_sql_not_uptodate | lower }},
-  "DetachLostReplicasAfterMasterFailover":     {{ ha_orchestrator_detach_lost_replicas_after_failover | lower }},
+  "MySQLOrchestratorDatabase": "{{ percona_ha_orchestrator_backend_user.database }}",
 
-  "MySQLConnectTimeoutSeconds": {{ ha_orchestrator_connect_timeout_seconds }},
-  "MySQLReadTimeoutSeconds":    {{ ha_orchestrator_read_timeout_seconds }},
-  "UseSSL":                     false,
-  "AuthenticationMethod":       "",
+  "MySQLOrchestratorUser": "{{ percona_ha_orchestrator_backend_user.name }}",
+
+  "MySQLOrchestratorPassword": "{{ percona_ha_orchestrator_backend_user.password }}",
+
+  "HostnameResolveMethod": "{{ percona_ha_orchestrator_hostname_resolve_method }}",
+
+  "MySQLHostnameResolveMethod": "{{ percona_ha_orchestrator_mysql_hostname_resolve_method }}",
+
+  "RejectHostnameResolvePattern": "{{ percona_ha_orchestrator_reject_hostname_pattern }}",
+
+  "InstancePollSeconds": {{ percona_ha_orchestrator_instance_poll_seconds }},
+
+  "DiscoverByShowSlaveHosts": true,
+
+  "ReasonableReplicationLagSeconds":
+    {{ percona_ha_orchestrator_reasonable_replication_lag_seconds }},
+
+  "ReplicationLagQuery": "",
+
+  "MaxReplicasToRenderInTopology":
+    {{ percona_ha_orchestrator_max_replicas_to_render }},
+
+  "RecoveryEnabled":
+    {{ percona_ha_orchestrator_recovery_enabled | lower }},
+
+  "RecoveryPollSeconds":
+    {{ percona_ha_orchestrator_recovery_poll_seconds }},
+
+  "RecoveryPeriodBlockSeconds":
+    {{ percona_ha_orchestrator_recovery_period_block_seconds }},
+
+  "DetectionSamplingSize":
+    {{ percona_ha_orchestrator_detection_sampling_size }},
+
+  "RecoverMasterClusterFilters":
+    {{ percona_ha_orchestrator_recover_master_filters | to_json }},
+
+  "RecoverIntermediateMasterClusterFilters":
+    {{ percona_ha_orchestrator_recover_intermediate_master_filters | to_json }},
+
+  "FailMasterPromotionIfSQLThreadNotUpToDate":
+    {{ percona_ha_orchestrator_fail_master_if_sql_not_uptodate | lower }},
+
+  "DetachLostReplicasAfterMasterFailover":
+    {{ percona_ha_orchestrator_detach_lost_replicas_after_failover | lower }},
+
+  "MySQLConnectTimeoutSeconds":
+    {{ percona_ha_orchestrator_connect_timeout_seconds }},
+
+  "MySQLReadTimeoutSeconds":
+    {{ percona_ha_orchestrator_read_timeout_seconds }},
+
+  "UseSSL": false,
+
+  "AuthenticationMethod": "",
 
   "PostMasterFailoverProcesses": [
-    "{{ ha_failover_script_path }} {failedHost} {successorHost}"
+    "{{ percona_ha_failover_script_path }} {failedHost} {successorHost}"
   ]
 }
