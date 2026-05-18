@@ -1,13 +1,11 @@
----
 # =============================================================================
 # Orchestrator Installation
 # Archive structure: ./usr/local/orchestrator/orchestrator
 # Strip 4 components to extract binary directly to install path
 # =============================================================================
-
 - name: Create orchestrator install directory
   ansible.builtin.file:
-    path:  "{{ ha_orchestrator_install_path }}"
+    path:  "{{ percona_ha_orchestrator_install_path }}"
     state: directory
     owner: root
     group: root
@@ -28,7 +26,7 @@
 - name: Extract orchestrator archive
   ansible.builtin.unarchive:
     src:        "{{ orchestrator_tmp_archive }}"
-    dest:       "{{ ha_orchestrator_install_path }}"
+    dest:       "{{ percona_ha_orchestrator_install_path }}"
     remote_src: true
     extra_opts: ['--strip-components=4']
   when: not orchestrator_binary_stat.stat.exists
@@ -42,7 +40,7 @@
 
 - name: Create orchestrator log file
   ansible.builtin.file:
-    path:              "{{ ha_orchestrator_log_file }}"
+    path:              "{{ percona_ha_orchestrator_log_file }}"
     state:             touch
     owner:             root
     group:             root
@@ -52,7 +50,7 @@
 
 - name: Create orchestrator alert log file
   ansible.builtin.file:
-    path:              "{{ ha_orchestrator_alert_log }}"
+    path:              "{{ percona_ha_orchestrator_alert_log }}"
     state:             touch
     owner:             root
     group:             root
@@ -61,25 +59,13 @@
     access_time:       preserve
 
 - name: Deploy orchestrator systemd service file
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src:   orchestrator.service.j2
     dest:  "{{ orchestrator_service_file }}"
     owner: root
     group: root
     mode:  "0644"
-    content: |
-      [Unit]
-      Description=orchestrator: MySQL replication management and visualization
-      Documentation=https://github.com/openark/orchestrator
-      After=network.target
-
-      [Service]
-      WorkingDirectory={{ ha_orchestrator_install_path }}
-      ExecStart={{ ha_orchestrator_install_path }}/orchestrator http
-      Restart=on-failure
-      RestartSec=10
-
-      [Install]
-      WantedBy=multi-user.target
   notify: Reload systemd
+
 - name: Flush handlers to reload systemd
   ansible.builtin.meta: flush_handlers
