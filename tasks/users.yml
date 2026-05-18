@@ -1,18 +1,122 @@
----
-- name: Ensure MySQL users are present.
+# =============================================================================
+# MySQL Users Setup
+# Section 1 — General users (all nodes except slave)
+# Section 2 — HA users (master only — replicates to slave via binlog)
+# =============================================================================
+
+# =====================================================
+# SECTION 1 — General MySQL Users
+# Runs on master only — slave gets users via replication
+# =====================================================
+- name: Ensure MySQL users are present
   community.mysql.mysql_user:
-    login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
-    name: "{{ item.name }}"
-    host: "{{ item.host | default('localhost') }}"
-    password: "{{ item.password }}"
-    priv: "{{ item.priv | default('*.*:USAGE') }}"
-    state: "{{ item.state | default('present') }}"
-    append_privs: "{{ item.append_privs | default('no') }}"
-    encrypted: "{{ item.encrypted | default('no') }}"
-  with_items: "{{ mysql_users }}"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    login_port:     "{{ percona_port }}"
+    name:           "{{ item.name }}"
+    host:           "{{ item.host | default('localhost') }}"
+    password:       "{{ item.password }}"
+    priv:           "{{ item.priv | default('*.*:USAGE') }}"
+    state:          "{{ item.state | default('present') }}"
+    append_privs:   "{{ item.append_privs | default('no') }}"
+    encrypted:      "{{ item.encrypted | default('no') }}"
+  with_items: "{{ percona_users }}"
   no_log: true
   tags:
     - create_user
   when:
-    - inventory_hostname not in groups['percona-slave']
+    - percona_users_creation | default(true)
+    - inventory_hostname not in groups[percona_slave_group] | default([])
+
+# =====================================================
+# SECTION 2 — HA Replication and Orchestrator Users
+# Runs on master only — replicates to slave via binlog
+# Uses login_user + login_password
+# (no socket auth — caching_sha2_password)
+# =====================================================
+
+- name: Create HA replication user on master
+  community.mysql.mysql_user:
+    name:           "{{ percona_ha_replication_user.name }}"
+    host:           "%"
+    password:       "{{ percona_ha_replication_user.password }}"
+    priv:           "{{ percona_ha_replication_user.priv }}"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    state:          present
+  no_log: true
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Grant privileges to orchestrator topology user
+  community.mysql.mysql_user:
+    name:     "{{ percona_ha_orchestrator_topology_user.name }}"
+    host:     "%"
+    password: "{{ percona_ha_orchestrator_topology_user.password }}"
+    priv: >-
+      *.*:SUPER,REPLICATION SLAVE,REPLICATION CLIENT,RELOAD,PROCESS,SELECT,BACKUP_ADMIN/
+      sys.*:SELECT/
+      mysql.slave_master_info:SELECT/
+      performance_schema.replication_applier_status_by_worker:SELECT/
+      performance_schema.replication_group_members:SELECT/
+      performance_schema.replication_group_member_stats:SELECT
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    append_privs:   true
+    state:          present
+  no_log: true
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Create orchestrator backend database
+  community.mysql.mysql_db:
+    name:           "{{ percona_ha_orchestrator_backend_user.database }}"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    state:          present
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Create orchestrator backend DB user
+  community.mysql.mysql_user:
+    name:           "{{ percona_ha_orchestrator_backend_user.name }}"
+    host:           "127.0.0.1"
+    password:       "{{ percona_ha_orchestrator_backend_user.password }}"
+    priv:           "{{ percona_ha_orchestrator_backend_user.database }}.*:ALL"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    state:          present
+  no_log: true
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Create application user
+  community.mysql.mysql_user:
+    name:           "{{ percona_ha_app_user.name }}"
+    host:           "{{ percona_ha_app_user.host }}"
+    password:       "{{ percona_ha_app_user.password }}"
+    priv:           "*.*:SELECT,INSERT,UPDATE,DELETE"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    state:          present
+  no_log: true
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Set mysql_native_password for app user
+  community.mysql.mysql_query:
+    query: >
+      ALTER USER '{{ percona_ha_app_user.name }}'@'{{ percona_ha_app_user.host }}'
+      IDENTIFIED WITH mysql_native_password
+      BY '{{ percona_ha_app_user.password }}'
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+  no_log: true
+  when:
+    - percona_configure_replication_users | default(false)
+    - inventory_hostname in groups[percona_master_group] | default([])
