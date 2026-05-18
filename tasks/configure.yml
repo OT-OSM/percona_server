@@ -1,62 +1,70 @@
----
+# =============================================================================
+# Percona Server Configuration + Secure Installation
+# Section 1 — MySQL configuration, datadir, slow query log, service start
+# Section 2 — Secure installation (master only — slave inherits via replication)
+# =============================================================================
+
+# =====================================================
+# SECTION 1 — MySQL Configuration
+# =====================================================
+
 - name: Get MySQL version
-  ansible.builtin.command: 'mysql --version'
+  ansible.builtin.command: mysql --version
   register: mysql_cli_version
   changed_when: false
   check_mode: false
 
 - name: Copy percona global configuration file
   ansible.builtin.template:
-    src: mysqld.cnf.j2
-    dest: "{{ mysql_config_file }}"
+    src:   mysqld.cnf.j2
+    dest:  "{{ percona_config_file }}"
     owner: root
     group: root
-    mode: "0644"
+    mode:  "0644"
   notify: restart_percona
   register: mysql_config
 
 - name: Create slow query log file
   ansible.builtin.file:
-    path: "{{ mysql_slow_query_log_file }}"
-    state: touch
-    owner: mysql
-    group: mysql
-    mode: "0640"
+    path:              "{{ percona_slow_query_log_file }}"
+    state:             touch
+    owner:             mysql
+    group:             mysql
+    mode:              "0640"
     modification_time: preserve
-    access_time: preserve
-  when: mysql_slow_query_log_enabled
+    access_time:       preserve
+  when: percona_slow_query_log_enabled
 
 - name: Create datadir of MySQL
   ansible.builtin.file:
-    path: "{{ mysql_datadir }}"
+    path:  "{{ percona_datadir }}"
     state: directory
     owner: mysql
     group: mysql
-    mode: "0755"
-    setype: mysqld_db_t
+    mode:  "0755"
 
 - name: Create error log file
   ansible.builtin.file:
-    path: "{{ mysql_log_error }}"
-    state: touch
-    owner: mysql
-    group: mysql
-    mode: "0640"
+    path:              "{{ percona_log_error }}"
+    state:             touch
+    owner:             mysql
+    group:             mysql
+    mode:              "0640"
     modification_time: preserve
-    access_time: preserve
+    access_time:       preserve
   when:
-    - mysql_log | default(true)
-    - mysql_log_error | default(false)
+    - percona_log | default(true)
+    - percona_log_error | default(false)
 
 - name: Ensure MySQL is started and enabled
   ansible.builtin.service:
-    name: "{{ mysql_daemon }}"
-    state: started
+    name:    "{{ percona_daemon }}"
+    state:   started
     enabled: true
   register: mysql_service_configuration
 
 # Flush handlers immediately after config — ensures MySQL restarts
-# before replication tasks run, picking up server-id and GTID settings.
+# before replication tasks run, picking up server-id and GTID settings
 - name: Flush handlers to apply config changes
   ansible.builtin.meta: flush_handlers
 
@@ -65,6 +73,98 @@
 # was already written but MySQL never restarted to pick it up)
 - name: Restart MySQL if config was updated
   ansible.builtin.service:
-    name: "{{ mysql_daemon }}"
+    name:  "{{ percona_daemon }}"
     state: restarted
   when: mysql_config is changed
+
+# =====================================================
+# SECTION 2 — Secure Installation
+# Uses password auth — caching_sha2_password (no socket auth)
+# Write operations master only — slave inherits via replication
+# =====================================================
+
+- name: Check MySQL login with password
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --connect-timeout=10
+    -NBe "SELECT 1"
+  register: mysql_login_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Disallow root login remotely
+  community.mysql.mysql_user:
+    name:           "{{ percona_root_username }}"
+    host:           "%"
+    state:          absent
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Get list of hosts for the anonymous user
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --connect-timeout=10
+    -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
+  register: mysql_anonymous_hosts
+  changed_when: false
+  no_log: true
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Remove anonymous MySQL users
+  community.mysql.mysql_user:
+    name:           ""
+    host:           "{{ item }}"
+    state:          absent
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+  with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname in groups[percona_master_group] | default([])
+
+- name: Get list of hosts for the root user
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --connect-timeout=10
+    -NBe "SELECT Host FROM mysql.user
+    WHERE User = '{{ percona_root_username }}'
+    ORDER BY (Host='localhost') ASC"
+  register: mysql_root_hosts
+  changed_when: false
+  no_log: true
+  when:
+    - mysql_login_check.rc == 0
+    - inventory_hostname not in groups[percona_slave_group] | default([])
+
+- name: Ensure root password is set
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - -u
+      - "{{ percona_root_username }}"
+      - "-p{{ percona_root_password }}"
+      - --connect-timeout=10
+      - -NBe
+      - >-
+        ALTER USER '{{ percona_root_username }}'@'{{ item }}'
+        IDENTIFIED WITH caching_sha2_password
+        BY '{{ percona_root_password }}';
+  with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
+  no_log: true
+  changed_when: true
+  when:
+    - mysql_login_check.rc == 0
+    - percona_install_packages | bool or percona_root_password_update
+    - inventory_hostname not in groups[percona_slave_group] | default([])
