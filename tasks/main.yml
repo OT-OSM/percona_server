@@ -4,15 +4,15 @@
 # ########################### #
 - name: Including tasks for Installation of Percona
   ansible.builtin.include_tasks: "{{ ansible_distribution }}.yml"
+  when: percona_install_packages | default(true)
 
 # ############################ #
 # Percona Server Configuration #
+# Includes Secure Installation #
 # ############################ #
 - name: Including tasks for Configuring MySQL
   ansible.builtin.include_tasks: configure.yml
-
-- name: Including tasks to Secure MySQL Installation
-  ansible.builtin.include_tasks: secure-installation.yml
+  when: percona_install_packages | default(true)
 
 # ############################# #
 # Percona Cluster Configuration #
@@ -20,13 +20,6 @@
 - name: Including tasks to Replication Setup
   ansible.builtin.include_tasks: replication.yml
   when: percona_replication | default(false)
-
-# ################################### #
-# Percona Backup Server Configuration #
-# ################################### #
-- name: Including tasks to Backup Server Setup
-  ansible.builtin.include_tasks: backup.yml
-  when: percona_backup | default(false)
 
 # ############################# #
 # Percona User and DB Operation #
@@ -39,24 +32,15 @@
   ansible.builtin.include_tasks: users.yml
   tags:
     - create_user
-  when: percona_users_creation | default(true)
+  when: >
+    percona_users_creation | default(true) or
+    percona_configure_replication_users | default(false)
 
 - name: Including tasks to exporter metrics
   ansible.builtin.include_tasks: mysql_metrics.yml
   tags:
     - mysql_metrics
   when: percona_metrics_enabled | default(true)
-
-# ################################## #
-# HA — Replication Users Setup       #
-# ################################## #
-- name: Including tasks for HA Replication Users Setup
-  ansible.builtin.include_tasks: replication_users.yml
-  tags:
-    - replication_users
-  when:
-    - percona_configure_replication_users | default(false)
-    - inventory_hostname in groups[percona_master_group] | default([])
 
 # ################################## #
 # HA — Orchestrator                  #
@@ -100,7 +84,6 @@
   when: >
     percona_minio_configure | default(false) or
     percona_deploy_backup_scripts | default(false) or
-    percona_configure_replication_users | default(false) or
     percona_backup_server | default(false)
 
 # ################################## #
@@ -128,4 +111,11 @@
     percona_deploy_backup_scripts | default(false) or
     percona_backup_server | default(false)
 
-
+# ################################## #
+# HA — PMM Monitoring Setup          #
+# ################################## #
+- name: Including tasks for PMM Monitoring Setup
+  ansible.builtin.include_tasks: pmm.yml
+  tags:
+    - pmm
+  when: percona_pmm_enabled | default(false)
