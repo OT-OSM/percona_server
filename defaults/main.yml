@@ -313,6 +313,17 @@ percona_ha_proxysql_master_max_connections: 200
 percona_ha_proxysql_slave_max_connections:  100
 percona_ha_proxysql_max_replication_lag:    10
 
+# =============================================================================
+# HA — PROXYSQL PACKAGE SETTINGS
+# =============================================================================
+percona_ha_proxysql_download_url: "https://github.com/sysown/proxysql/releases/download/v2.5.5/proxysql_2.5.5-ubuntu20_amd64.deb"
+
+percona_ha_proxysql_tmp_package: "/tmp/proxysql.deb"
+
+percona_ha_proxysql_pid_file: "/var/lib/proxysql/proxysql.pid"
+
+percona_ha_proxysql_service_name: "proxysql"
+
 # =====================================================
 # HA — PROXYSQL QUERY RULES (10 production rules)
 # =====================================================
