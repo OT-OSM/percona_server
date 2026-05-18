@@ -1,0 +1,13 @@
+[Unit]
+Description=orchestrator: MySQL replication management and visualization
+Documentation=https://github.com/openark/orchestrator
+After=network.target
+
+[Service]
+WorkingDirectory={{ percona_ha_orchestrator_install_path }}
+ExecStart={{ percona_ha_orchestrator_install_path }}/orchestrator http
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
