@@ -57,6 +57,18 @@ percona_socket:            /var/run/mysqld/mysqld.sock
 percona_sql_mode:          "STRICT_ALL_TABLES"
 
 # =====================================================
+# MYSQL — CONFIG FILES & SERVICE
+# =====================================================
+percona_config_file:        /etc/mysql/mysql.conf.d/mysqld.cnf
+percona_config_include_dir: /etc/mysql/conf.d
+percona_config_include_files: []
+percona_daemon:             mysql
+percona_pid_file:           /var/run/mysqld/mysqld.pid
+percona_log_error:          /var/log/mysql/error.log
+percona_log:                ""
+percona_service_name:       mysql
+
+# =====================================================
 # MYSQL — SERVER IDENTITY
 # Override percona_server_id per play in playbook.yml
 # Master play: percona_server_id: "1"
@@ -176,19 +188,6 @@ percona_event_scheduler_state:  "OFF"
 percona_innodb_file_per_table:          "1"
 percona_innodb_flush_log_at_trx_commit: "1"
 percona_innodb_lock_wait_timeout:       "50"
-
-# =====================================================
-# MYSQL — LOGGING
-# =====================================================
-percona_log: ""
-# percona_log_error:  /var/log/mysql/mysql.err
-# percona_syslog_tag: mysql
-
-# =====================================================
-# MYSQL — CONFIG INCLUDE FILES
-# =====================================================
-percona_config_include_files: []
-percona_config_include_dir:   /etc/mysql/conf.d
 
 # =====================================================
 # MYSQL — DATABASES & USERS
@@ -312,38 +311,10 @@ percona_ha_proxysql_reader_hostgroup:       20
 percona_ha_proxysql_master_max_connections: 200
 percona_ha_proxysql_slave_max_connections:  100
 percona_ha_proxysql_max_replication_lag:    10
-
-# =====================================================
-# MYSQL — SERVICE SETTINGS
-# =====================================================
-percona_service_name: "mysql"
-percona_pid_file: "/var/run/mysqld/mysqld.pid"
-percona_log_error: "/var/log/mysql/error.log"
-
-
-# =============================================================================
-# HA — MINIO SERVER SETTINGS
-# =============================================================================
-percona_ha_minio_system_user: "minio"
-
-percona_ha_minio_install_path: "/usr/local/bin/minio"
-
-percona_ha_minio_datadir: "/data/minio"
-
-percona_ha_minio_port: 9000
-
-percona_ha_minio_console_port: 8443
-
-# =============================================================================
-# HA — PROXYSQL PACKAGE SETTINGS
-# =============================================================================
-percona_ha_proxysql_download_url: "https://github.com/sysown/proxysql/releases/download/v2.5.5/proxysql_2.5.5-ubuntu20_amd64.deb"
-
-percona_ha_proxysql_tmp_package: "/tmp/proxysql.deb"
-
-percona_ha_proxysql_pid_file: "/var/lib/proxysql/proxysql.pid"
-
-percona_ha_proxysql_service_name: "proxysql"
+percona_ha_proxysql_download_url:           "https://github.com/sysown/proxysql/releases/download/v2.5.5/proxysql_2.5.5-ubuntu20_amd64.deb"
+percona_ha_proxysql_tmp_package:            "/tmp/proxysql.deb"
+percona_ha_proxysql_pid_file:               "/var/lib/proxysql/proxysql.pid"
+percona_ha_proxysql_service_name:           "proxysql"
 
 # =====================================================
 # HA — PROXYSQL QUERY RULES (10 production rules)
@@ -411,7 +382,7 @@ percona_ha_proxysql_query_rules:
     comment: "Stored procedures to master"
 
 # =============================================================================
-# HA — MINIO SETTINGS
+# HA — MINIO CLIENT SETTINGS
 # Override endpoint and password via: VAULT_MINIO_PASSWORD
 # =============================================================================
 percona_ha_mc_install_path:     "/usr/local/bin/mc"
@@ -423,6 +394,15 @@ percona_ha_minio_bucket:        "percona-backup"
 percona_ha_minio_full_folder:   "full"
 percona_ha_minio_inc_folder:    "incremental"
 percona_ha_minio_resync_folder: "failover-resync"
+
+# =============================================================================
+# HA — MINIO SERVER SETTINGS
+# =============================================================================
+percona_ha_minio_system_user:   "minio"
+percona_ha_minio_install_path:  "/usr/local/bin/minio"
+percona_ha_minio_datadir:       "/data/minio"
+percona_ha_minio_port:          9000
+percona_ha_minio_console_port:  8443
 
 # =====================================================
 # HA — BACKUP SETTINGS
