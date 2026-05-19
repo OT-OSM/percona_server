@@ -162,7 +162,7 @@
         IDENTIFIED WITH caching_sha2_password
         BY '{{ percona_root_password }}';
   with_items: "{{ mysql_root_hosts.stdout_lines | default([]) }}"
-  no_log: true
+  no_log: false
   changed_when: true
   when:
     - mysql_login_check.rc == 0
