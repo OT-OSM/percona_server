@@ -1,4 +1,3 @@
-
 # =============================================================================
 # ProxySQL Configuration
 # Uses mysql client directly on admin port 6032
@@ -7,21 +6,15 @@
 
 - name: Define ProxySQL admin command
   ansible.builtin.set_fact:
-    proxysql_admin_cmd: >-
-      mysql
-      -u {{ percona_ha_proxysql_admin_user }}
-      -p{{ percona_ha_proxysql_admin_password }}
-      -h 127.0.0.1
-      -P {{ percona_ha_proxysql_admin_port }}
+    proxysql_admin_cmd: "mysql -u {{ percona_ha_proxysql_admin_user }} -p{{ percona_ha_proxysql_admin_password }} -h 127.0.0.1 -P {{ percona_ha_proxysql_admin_port }}"
 
 # =============================================================================
 # Configure Replication Hostgroups
 # =============================================================================
 
 - name: Configure ProxySQL replication hostgroups
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     REPLACE INTO mysql_replication_hostgroups
     (writer_hostgroup,reader_hostgroup,check_type,comment)
     VALUES(
@@ -30,6 +23,8 @@
       'read_only',
       'Percona HA Cluster'
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -39,9 +34,8 @@
 # =============================================================================
 
 - name: Configure ProxySQL backend master server
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     REPLACE INTO mysql_servers
     (hostgroup_id,hostname,port,max_connections,status)
     VALUES(
@@ -51,6 +45,8 @@
       {{ percona_ha_proxysql_master_max_connections }},
       'ONLINE'
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -60,9 +56,8 @@
 # =============================================================================
 
 - name: Configure ProxySQL backend replica servers
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     REPLACE INTO mysql_servers
     (hostgroup_id,hostname,port,max_connections,max_replication_lag,status)
     VALUES(
@@ -73,6 +68,8 @@
       {{ percona_ha_proxysql_max_replication_lag }},
       'ONLINE'
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   loop: "{{ groups[percona_slave_group] | default([]) }}"
@@ -83,9 +80,8 @@
 # =============================================================================
 
 - name: Configure ProxySQL application user
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     REPLACE INTO mysql_users
     (username,password,default_hostgroup,active,transaction_persistent,max_connections)
     VALUES(
@@ -96,6 +92,8 @@
       {{ percona_ha_app_user.transaction_persistent | default(1) }},
       {{ percona_ha_app_user.max_connections | default(100) }}
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -105,9 +103,8 @@
 # =============================================================================
 
 - name: Configure ProxySQL orchestrator monitor user
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     REPLACE INTO mysql_users
     (username,password,default_hostgroup,active,transaction_persistent,max_connections)
     VALUES(
@@ -118,19 +115,30 @@
       0,
       10
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
 
 # =============================================================================
 # Configure Query Rules
+# Clear existing rules first then insert fresh
 # =============================================================================
 
+- name: Clear existing ProxySQL query rules
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "DELETE FROM mysql_query_rules;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  when: percona_proxysql_configure | bool
+
 - name: Configure ProxySQL query rules
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
-    REPLACE INTO mysql_query_rules
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
+    INSERT INTO mysql_query_rules
     (rule_id,active,match_pattern,destination_hostgroup,apply,comment)
     VALUES(
       {{ item.rule_id }},
@@ -138,8 +146,10 @@
       '{{ item.match_pattern }}',
       {{ item.destination_hostgroup }},
       {{ item.apply }},
-      '{{ item.comment | default('') | replace(\"'\", \"''\") }}'
+      '{{ item.comment }}'
     );"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: false
   loop: "{{ percona_ha_proxysql_query_rules }}"
@@ -150,17 +160,17 @@
 # =============================================================================
 
 - name: Configure ProxySQL monitoring credentials
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     UPDATE global_variables
     SET variable_value='{{ percona_ha_orchestrator_topology_user.name }}'
     WHERE variable_name='mysql-monitor_username';
 
     UPDATE global_variables
     SET variable_value='{{ percona_ha_orchestrator_topology_user.password }}'
-    WHERE variable_name='mysql-monitor_password';
-    "
+    WHERE variable_name='mysql-monitor_password';"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -170,14 +180,14 @@
 # =============================================================================
 
 - name: Load ProxySQL configuration to runtime
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     LOAD MYSQL SERVERS TO RUNTIME;
     LOAD MYSQL USERS TO RUNTIME;
     LOAD MYSQL QUERY RULES TO RUNTIME;
-    LOAD MYSQL VARIABLES TO RUNTIME;
-    "
+    LOAD MYSQL VARIABLES TO RUNTIME;"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -187,14 +197,14 @@
 # =============================================================================
 
 - name: Save ProxySQL configuration to disk
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "
     SAVE MYSQL SERVERS TO DISK;
     SAVE MYSQL USERS TO DISK;
     SAVE MYSQL QUERY RULES TO DISK;
-    SAVE MYSQL VARIABLES TO DISK;
-    "
+    SAVE MYSQL VARIABLES TO DISK;"
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true
   when: percona_proxysql_configure | bool
@@ -204,9 +214,10 @@
 # =============================================================================
 
 - name: Validate ProxySQL backend servers
-  ansible.builtin.command: >
-    {{ proxysql_admin_cmd }}
-    -e "SELECT hostgroup_id,hostname,status FROM mysql_servers;"
+  ansible.builtin.shell: |
+    {{ proxysql_admin_cmd }} -e "SELECT hostgroup_id,hostname,status FROM mysql_servers;"
+  args:
+    executable: /bin/bash
   changed_when: false
   register: proxysql_backend_validation
   when: percona_proxysql_configure | bool
@@ -215,4 +226,3 @@
   ansible.builtin.debug:
     var: proxysql_backend_validation.stdout_lines
   when: percona_proxysql_configure | bool
-
