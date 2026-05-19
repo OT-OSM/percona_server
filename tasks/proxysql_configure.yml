@@ -141,7 +141,7 @@
       '{{ item.comment | default('') | replace(\"'\", \"''\") }}'
     );"
   changed_when: false
-  no_log: true
+  no_log: false
   loop: "{{ percona_ha_proxysql_query_rules }}"
   when: percona_proxysql_configure | bool
 
