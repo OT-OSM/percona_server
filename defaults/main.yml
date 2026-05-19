@@ -59,14 +59,14 @@ percona_sql_mode:          "STRICT_ALL_TABLES"
 # =====================================================
 # MYSQL — CONFIG FILES & SERVICE
 # =====================================================
-percona_config_file:        /etc/mysql/mysql.conf.d/mysqld.cnf
-percona_config_include_dir: /etc/mysql/conf.d
+percona_config_file:          /etc/mysql/mysql.conf.d/mysqld.cnf
+percona_config_include_dir:   /etc/mysql/conf.d
 percona_config_include_files: []
-percona_daemon:             mysql
-percona_pid_file:           /var/run/mysqld/mysqld.pid
-percona_log_error:          /var/log/mysql/error.log
-percona_log:                ""
-percona_service_name:       mysql
+percona_daemon:               mysql
+percona_pid_file:             /var/run/mysqld/mysqld.pid
+percona_log_error:            /var/log/mysql/error.log
+percona_log:                  ""
+percona_service_name:         mysql
 
 # =====================================================
 # MYSQL — SERVER IDENTITY
@@ -212,15 +212,6 @@ percona_backup_user:
   password: "changeme"
 
 # =====================================================
-# HA — ORCHESTRATOR DERIVED SETTINGS
-# =====================================================
-percona_ha_orchestrator_binary:       "{{ percona_ha_orchestrator_install_path }}/orchestrator"
-percona_ha_orchestrator_service_name: "orchestrator"
-percona_ha_orchestrator_service_file: "/etc/systemd/system/orchestrator.service"
-percona_ha_orchestrator_tmp_archive:  "/tmp/orchestrator.tar.gz"
-percona_ha_orchestrator_download_url: "https://github.com/openark/orchestrator/releases/download/v{{ percona_ha_orchestrator_version }}/orchestrator-{{ percona_ha_orchestrator_version }}-linux-amd64.tar.gz"
-
-# =====================================================
 # MYSQLD_EXPORTER — PROMETHEUS METRICS
 # Override percona_exporter_db_password via Vault
 # =====================================================
@@ -282,6 +273,15 @@ percona_ha_orchestrator_debug:        false
 percona_ha_orchestrator_host:         ""
 
 # =====================================================
+# HA — ORCHESTRATOR DERIVED SETTINGS
+# =====================================================
+percona_ha_orchestrator_binary:       "{{ percona_ha_orchestrator_install_path }}/orchestrator"
+percona_ha_orchestrator_service_name: "orchestrator"
+percona_ha_orchestrator_service_file: "/etc/systemd/system/orchestrator.service"
+percona_ha_orchestrator_tmp_archive:  "/tmp/orchestrator.tar.gz"
+percona_ha_orchestrator_download_url: "https://github.com/openark/orchestrator/releases/download/v{{ percona_ha_orchestrator_version }}/orchestrator-{{ percona_ha_orchestrator_version }}-linux-amd64.tar.gz"
+
+# =====================================================
 # HA — ORCHESTRATOR POLLING & DETECTION
 # =====================================================
 percona_ha_orchestrator_instance_poll_seconds:              5
@@ -327,66 +327,67 @@ percona_ha_proxysql_service_name:           "proxysql"
 
 # =====================================================
 # HA — PROXYSQL QUERY RULES (10 production rules)
+# writer hostgroup = 10 | reader hostgroup = 20
 # =====================================================
 percona_ha_proxysql_query_rules:
   - rule_id: 1
     active: 1
     match_pattern: "^SELECT.*FOR UPDATE"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Locking reads to master"
   - rule_id: 2
     active: 1
     match_pattern: "^SELECT.*LOCK IN SHARE MODE"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Lock share mode to master"
   - rule_id: 3
     active: 1
     match_pattern: "^SELECT.*INTO"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "SELECT INTO to master"
   - rule_id: 4
     active: 1
     match_pattern: "^SELECT"
-    destination_hostgroup: "{{ percona_ha_proxysql_reader_hostgroup }}"
+    destination_hostgroup: 20
     apply: 1
     comment: "Regular reads to replicas"
   - rule_id: 5
     active: 1
     match_pattern: "^SHOW"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "SHOW commands to master"
   - rule_id: 6
     active: 1
     match_pattern: "^SET"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "SET commands to master"
   - rule_id: 7
     active: 1
     match_pattern: "^BEGIN"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Transactions to master"
   - rule_id: 8
     active: 1
     match_pattern: "^COMMIT"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Commit to master"
   - rule_id: 9
     active: 1
     match_pattern: "^ROLLBACK"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Rollback to master"
   - rule_id: 10
     active: 1
     match_pattern: "^CALL"
-    destination_hostgroup: "{{ percona_ha_proxysql_writer_hostgroup }}"
+    destination_hostgroup: 10
     apply: 1
     comment: "Stored procedures to master"
 
