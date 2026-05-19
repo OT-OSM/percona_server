@@ -212,6 +212,15 @@ percona_backup_user:
   password: "changeme"
 
 # =====================================================
+# HA — ORCHESTRATOR DERIVED SETTINGS
+# =====================================================
+percona_ha_orchestrator_binary:       "{{ percona_ha_orchestrator_install_path }}/orchestrator"
+percona_ha_orchestrator_service_name: "orchestrator"
+percona_ha_orchestrator_service_file: "/etc/systemd/system/orchestrator.service"
+percona_ha_orchestrator_tmp_archive:  "/tmp/orchestrator.tar.gz"
+percona_ha_orchestrator_download_url: "https://github.com/openark/orchestrator/releases/download/v{{ percona_ha_orchestrator_version }}/orchestrator-{{ percona_ha_orchestrator_version }}-linux-amd64.tar.gz"
+
+# =====================================================
 # MYSQLD_EXPORTER — PROMETHEUS METRICS
 # Override percona_exporter_db_password via Vault
 # =====================================================
