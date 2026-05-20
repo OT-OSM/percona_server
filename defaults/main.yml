@@ -415,6 +415,23 @@ percona_ha_minio_port:          9000
 percona_ha_minio_console_port:  8443
 
 # =====================================================
+# HA — BACKUP STORAGE TYPE
+# Options: minio | local
+# minio — streams backup directly to MinIO (no local disk)
+# local — stores backup on local disk
+# =====================================================
+percona_ha_backup_storage: "minio"
+
+# =====================================================
+# HA — LOCAL BACKUP SETTINGS
+# Used only when percona_ha_backup_storage: local
+# =====================================================
+percona_ha_local_backup_path:  "/var/backup/mysql"
+percona_ha_local_backup_owner: "root"
+percona_ha_local_backup_group: "root"
+percona_ha_local_backup_mode:  "0750"
+
+# =====================================================
 # HA — BACKUP SETTINGS
 # =====================================================
 percona_ha_backup_log_file:             "/var/log/mysql-backup.log"
