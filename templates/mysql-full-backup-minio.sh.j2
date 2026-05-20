@@ -4,7 +4,9 @@
 # Full xtrabackup stream to MinIO
 # Runs from replica node
 # Structure:
-# percona-backup/YYYY-MM-DD/sunday/full_YYYYMMDD_HHMMSS.xbstream.gz
+# percona-backup/YYYY-MM-DD-day/full_YYYYMMDD_HHMMSS.xbstream.gz
+# Example:
+# percona-backup/2026-05-20-tuesday/full_20260520_010001.xbstream.gz
 # =============================================================================
 
 set -o pipefail
@@ -29,14 +31,15 @@ XTRABACKUP_COMPRESS_THREADS="{{ percona_ha_xtrabackup_compress_threads }}"
 
 # =============================================================================
 # Date-Based Backup Structure
+# Combined date-day folder — easier navigation
+# Example: 2026-05-20-tuesday
 # =============================================================================
 
-WEEK_DATE=$(date +%Y-%m-%d)
-DAY_NAME=$(date +%A | tr '[:upper:]' '[:lower:]')
+DATE_DAY="$(date +%Y-%m-%d)-$(date +%A | tr '[:upper:]' '[:lower:]')"
 
 BACKUP_NAME="full_$(date +%Y%m%d_%H%M%S)"
 
-MINIO_PATH="${MINIO_BUCKET}/${WEEK_DATE}/${DAY_NAME}"
+MINIO_PATH="${MINIO_BUCKET}/${DATE_DAY}"
 
 # =============================================================================
 # Logging Function
@@ -51,7 +54,6 @@ log() {
 # =============================================================================
 
 log "INFO" "Starting full backup: ${BACKUP_NAME}"
-
 log "INFO" "MinIO path: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
 
 # =============================================================================
@@ -89,10 +91,8 @@ UPLOAD_EXIT=${PIPESTATUS[1]}
 
 if [ "${BACKUP_EXIT:-1}" -ne 0 ] || [ "${UPLOAD_EXIT:-1}" -ne 0 ]; then
   log "ERROR" \
-  "Full backup failed! xtrabackup=${BACKUP_EXIT} upload=${UPLOAD_EXIT}"
-
+    "Full backup failed! xtrabackup=${BACKUP_EXIT} upload=${UPLOAD_EXIT}"
   tail -5 /tmp/xtrabackup_full.log >> "$LOG"
-
   exit 1
 fi
 
@@ -114,15 +114,14 @@ log "INFO" "LSN saved: ${LSN}"
 # Backup Completion
 # =============================================================================
 
-log "INFO" \
-"Full backup complete: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
+log "INFO" "Full backup complete: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
 
 # =============================================================================
 # Cleanup Old Backups
 # =============================================================================
 
 log "INFO" \
-"Cleaning backups older than {{ percona_ha_backup_full_retention_days }} days"
+  "Cleaning backups older than {{ percona_ha_backup_full_retention_days }} days"
 
 "${MC}" rm \
   --insecure \
