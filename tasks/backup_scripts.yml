@@ -1,7 +1,9 @@
 # =============================================================================
 # HA Backup Scripts — runs on slave/backup nodes
-# xtrabackup streams directly to MinIO — no local disk usage
-# mc client is already installed and configured via minio.yml
+# Storage type controlled by percona_ha_backup_storage toggle:
+#   minio — streams directly to MinIO (no local disk usage)
+#   local — stores on local disk
+# mc client is already installed and configured via minio.yml (minio only)
 # =============================================================================
 
 - name: Install percona-xtrabackup-80
@@ -30,6 +32,18 @@
     state: present
   when: qpress_apt.failed | default(false)
 
+# ── Local storage setup ───────────────────────────────────────────────────────
+# Only runs when percona_ha_backup_storage is local
+- name: Create local backup directory
+  ansible.builtin.file:
+    path:  "{{ percona_ha_local_backup_path }}"
+    state: directory
+    owner: "{{ percona_ha_local_backup_owner }}"
+    group: "{{ percona_ha_local_backup_group }}"
+    mode:  "{{ percona_ha_local_backup_mode }}"
+  when: percona_ha_backup_storage == "local"
+
+# ── Common setup — runs for both storage types ────────────────────────────────
 - name: Create backup metadata directory
   ansible.builtin.file:
     path:  "{{ percona_ha_backup_lsn_file | dirname }}"
@@ -48,9 +62,12 @@
     modification_time: preserve
     access_time:       preserve
 
+# ── Deploy correct backup scripts based on storage type ───────────────────────
+# minio → mysql-full-backup-minio.sh.j2
+# local → mysql-full-backup-local.sh.j2
 - name: Deploy full backup script
   ansible.builtin.template:
-    src:   mysql-full-backup.sh.j2
+    src:   "mysql-full-backup-{{ percona_ha_backup_storage }}.sh.j2"
     dest:  "{{ percona_ha_backup_scripts_path }}/mysql-full-backup.sh"
     owner: root
     group: root
@@ -58,12 +75,13 @@
 
 - name: Deploy incremental backup script
   ansible.builtin.template:
-    src:   mysql-incremental-backup.sh.j2
+    src:   "mysql-incremental-backup-{{ percona_ha_backup_storage }}.sh.j2"
     dest:  "{{ percona_ha_backup_scripts_path }}/mysql-incremental-backup.sh"
     owner: root
     group: root
     mode:  "0755"
 
+# ── Cron jobs — same for both storage types ───────────────────────────────────
 - name: Setup full backup cron job
   ansible.builtin.cron:
     name:    "MySQL HA full backup — weekly"
