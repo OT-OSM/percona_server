@@ -4,7 +4,9 @@
 # Incremental xtrabackup stream to MinIO
 # Runs from replica node
 # Structure:
-# percona-backup/YYYY-MM-DD/<weekday>/inc_<day>_YYYYMMDD_HHMMSS.xbstream.gz
+# percona-backup/YYYY-MM-DD-day/inc_<day>_YYYYMMDD_HHMMSS.xbstream.gz
+# Example:
+# percona-backup/2026-05-20-tuesday/inc_tuesday_20260520_010001.xbstream.gz
 # =============================================================================
 
 set -o pipefail
@@ -29,15 +31,16 @@ XTRABACKUP_COMPRESS_THREADS="{{ percona_ha_xtrabackup_compress_threads }}"
 
 # =============================================================================
 # Date-Based Backup Structure
+# Combined date-day folder — easier navigation
+# Example: 2026-05-20-tuesday
 # =============================================================================
 
-WEEK_DATE=$(date +%Y-%m-%d)
-
+DATE_DAY="$(date +%Y-%m-%d)-$(date +%A | tr '[:upper:]' '[:lower:]')"
 DAY_NAME=$(date +%A | tr '[:upper:]' '[:lower:]')
 
 BACKUP_NAME="inc_${DAY_NAME}_$(date +%Y%m%d_%H%M%S)"
 
-MINIO_PATH="${MINIO_BUCKET}/${WEEK_DATE}/${DAY_NAME}"
+MINIO_PATH="${MINIO_BUCKET}/${DATE_DAY}"
 
 # =============================================================================
 # Logging Function
@@ -68,10 +71,9 @@ fi
 # =============================================================================
 
 log "INFO" \
-"Starting incremental backup: ${BACKUP_NAME} (base LSN: ${LSN})"
-
+  "Starting incremental backup: ${BACKUP_NAME} (base LSN: ${LSN})"
 log "INFO" \
-"MinIO path: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
+  "MinIO path: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
 
 # =============================================================================
 # Configure MinIO Alias
@@ -108,12 +110,9 @@ UPLOAD_EXIT=${PIPESTATUS[1]}
 # =============================================================================
 
 if [ "${BACKUP_EXIT:-1}" -ne 0 ] || [ "${UPLOAD_EXIT:-1}" -ne 0 ]; then
-
   log "ERROR" \
-  "Incremental backup failed! xtrabackup=${BACKUP_EXIT} upload=${UPLOAD_EXIT}"
-
+    "Incremental backup failed! xtrabackup=${BACKUP_EXIT} upload=${UPLOAD_EXIT}"
   tail -5 /tmp/xtrabackup_inc.log >> "$LOG"
-
   exit 1
 fi
 
@@ -134,14 +133,14 @@ log "INFO" "New LSN saved: ${NEW_LSN}"
 # =============================================================================
 
 log "INFO" \
-"Incremental backup complete: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
+  "Incremental backup complete: ${MINIO_PATH}/${BACKUP_NAME}.xbstream.gz"
 
 # =============================================================================
 # Cleanup Old Incremental Backups
 # =============================================================================
 
 log "INFO" \
-"Cleaning incremental backups older than {{ percona_ha_backup_inc_retention_days }} days"
+  "Cleaning incremental backups older than {{ percona_ha_backup_inc_retention_days }} days"
 
 "${MC}" rm \
   --insecure \
@@ -167,4 +166,3 @@ log "INFO" "Current storage usage after cleanup:"
 # =============================================================================
 
 log "INFO" "Incremental backup workflow completed successfully"
-
