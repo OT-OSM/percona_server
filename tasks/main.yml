@@ -77,14 +77,17 @@
 # ################################## #
 # HA — MinIO Client                  #
 # Install mc on ALL MySQL nodes      #
+# Only when backup_storage is minio  #
 # Required for backup and restore    #
 # ################################## #
 - name: Including tasks for MinIO Client Installation
   ansible.builtin.include_tasks: minio.yml
-  when: >
-    percona_minio_configure | default(false) or
-    percona_deploy_backup_scripts | default(false) or
-    percona_backup_server | default(false)
+  when:
+    - percona_ha_backup_storage | default("minio") == "minio"
+    - >
+      percona_minio_configure | default(false) or
+      percona_deploy_backup_scripts | default(false) or
+      percona_backup_server | default(false)
 
 # ################################## #
 # HA — Post-Failover Script          #
@@ -100,8 +103,10 @@
 
 # ################################## #
 # HA — Backup Scripts                #
-# Install on backup server or when   #
-# deploy_backup_scripts is true      #
+# Storage type controlled by         #
+# percona_ha_backup_storage toggle:  #
+#   minio — streams to MinIO         #
+#   local — stores on local disk     #
 # ################################## #
 - name: Including tasks for HA Backup Scripts
   ansible.builtin.include_tasks: backup_scripts.yml
