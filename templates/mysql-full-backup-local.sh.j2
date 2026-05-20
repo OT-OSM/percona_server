@@ -1,0 +1,34 @@
+#!/bin/bash
+# Full backup — stores on local disk
+set -euo pipefail
+
+DATE=$(date +%Y-%m-%d)
+DAY=$(date +%A | tr '[:upper:]' '[:lower:]')
+BACKUP_DIR="{{ percona_ha_local_backup_path }}/${DATE}/${DAY}"
+BACKUP_NAME="full_$(date +%Y%m%d_%H%M%S).xbstream.gz"
+
+mkdir -p "${BACKUP_DIR}"
+
+echo "[$(date)] Starting full backup to local: ${BACKUP_DIR}/${BACKUP_NAME}"
+
+xtrabackup \
+  --backup \
+  --user={{ percona_ha_orchestrator_topology_user.name }} \
+  --password={{ percona_ha_orchestrator_topology_user.password }} \
+  --stream=xbstream \
+  --parallel={{ percona_ha_xtrabackup_parallel }} \
+  --compress \
+  --compress-threads={{ percona_ha_xtrabackup_compress_threads }} \
+  2>/tmp/xtrabackup_full.log \
+| gzip > "${BACKUP_DIR}/${BACKUP_NAME}"
+
+grep "last_lsn" /tmp/xtrabackup_full.log | \
+  awk '{print $NF}' > {{ percona_ha_backup_lsn_file }}
+
+# Retention cleanup
+find {{ percona_ha_local_backup_path }} \
+  -name "full_*.xbstream.gz" \
+  -mtime +{{ percona_ha_backup_full_retention_days }} \
+  -delete
+
+echo "[$(date)] Full backup complete: ${BACKUP_DIR}/${BACKUP_NAME}"
