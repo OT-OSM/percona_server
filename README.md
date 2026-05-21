@@ -188,71 +188,9 @@ ansible_user=ubuntu
 # =============================================================================
 # MySQL HA — Percona Server + Orchestrator / ProxySQL / MinIO
 # =============================================================================
-
-# ─────────────────────────────────────────────
-# MySQL Master Node
-# ─────────────────────────────────────────────
 - name: Configure MySQL Master
-  hosts: percona-master
+  hosts: percona
   become: true
-  vars_files:
-    - vars/vars.yml
-  vars:
-    percona_server_id:                   "1"
-    percona_replication:                 true
-    percona_gtid_mode:                   true
-    percona_configure_replication_users: true
-    percona_minio_configure:             true
-    percona_deploy_backup_scripts:       true
-    percona_setup_backup_cron:           false
-    percona_pmm_enabled:                 false
-  roles:
-    - mysql
-
-# ─────────────────────────────────────────────
-# MySQL Slave Node
-# ─────────────────────────────────────────────
-- name: Configure MySQL Slave
-  hosts: percona-slave
-  become: true
-  vars_files:
-    - vars/vars.yml
-  vars:
-    percona_server_id:                   "2"
-    percona_replication:                 true
-    percona_gtid_mode:                   true
-    percona_configure_replication_users: false
-    percona_minio_configure:             true
-    percona_deploy_backup_scripts:       true
-    percona_setup_backup_cron:           true
-    percona_pmm_enabled:                 false
-  roles:
-    - mysql
-
-# ─────────────────────────────────────────────
-# Orchestrator + ProxySQL Host
-# ─────────────────────────────────────────────
-- name: Configure Orchestrator + ProxySQL
-  hosts: percona-orchestrator
-  become: true
-  vars_files:
-    - vars/vars.yml
-  vars:
-    percona_configure_replication_users: false
-    percona_orchestrator_install:        true
-    percona_orchestrator_configure:      true
-    percona_proxysql_install:            true
-    percona_proxysql_configure:          true
-    percona_minio_configure:             false
-    percona_deploy_failover_script:      true
-    percona_deploy_backup_scripts:       false
-    percona_setup_backup_cron:           false
-    percona_replication:                 false
-    percona_database_creation:           false
-    percona_users_creation:              false
-    percona_metrics_enabled:             false
-    percona_install_packages:            false
-    percona_pmm_enabled:                 false
   roles:
     - mysql
 ```
