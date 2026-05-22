@@ -1,0 +1,36 @@
+#!/bin/bash
+# Incremental backup — stores on local disk
+set -euo pipefail
+
+DATE=$(date +%Y-%m-%d)
+DAY=$(date +%A | tr '[:upper:]' '[:lower:]')
+BACKUP_DIR="{{ percona_ha_local_backup_path }}/${DATE}/${DAY}"
+BACKUP_NAME="inc_${DAY}_$(date +%Y%m%d_%H%M%S).xbstream.gz"
+LSN=$(cat {{ percona_ha_backup_lsn_file }} 2>/dev/null || echo "0")
+
+mkdir -p "${BACKUP_DIR}"
+
+echo "[$(date)] Starting incremental backup from LSN ${LSN} to local: ${BACKUP_DIR}/${BACKUP_NAME}"
+
+xtrabackup \
+  --backup \
+  --user={{ percona_ha_orchestrator_topology_user.name }} \
+  --password={{ percona_ha_orchestrator_topology_user.password }} \
+  --stream=xbstream \
+  --parallel={{ percona_ha_xtrabackup_parallel }} \
+  --compress \
+  --compress-threads={{ percona_ha_xtrabackup_compress_threads }} \
+  --incremental-lsn=${LSN} \
+  2>/tmp/xtrabackup_inc.log \
+| gzip > "${BACKUP_DIR}/${BACKUP_NAME}"
+
+grep "last_lsn" /tmp/xtrabackup_inc.log | \
+  awk '{print $NF}' > {{ percona_ha_backup_lsn_file }}
+
+# Retention cleanup
+find {{ percona_ha_local_backup_path }} \
+  -name "inc_*.xbstream.gz" \
+  -mtime +{{ percona_ha_backup_inc_retention_days }} \
+  -delete
+
+echo "[$(date)] Incremental backup complete: ${BACKUP_DIR}/${BACKUP_NAME}"

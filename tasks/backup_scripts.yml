@@ -1,0 +1,109 @@
+# =============================================================================
+# HA Backup Scripts — runs on slave/backup nodes
+# Storage type controlled by percona_ha_backup_storage toggle:
+#   minio — streams directly to MinIO (no local disk usage)
+#   local — stores on local disk
+# mc client is already installed and configured via minio.yml (minio only)
+# =============================================================================
+
+- name: Install percona-xtrabackup-80
+  ansible.builtin.apt:
+    name:         "percona-xtrabackup-80"
+    update_cache: true
+    state:        present
+
+- name: Install qpress from apt
+  ansible.builtin.apt:
+    name:  "qpress"
+    state: present
+  register: qpress_apt
+  failed_when: false
+
+- name: Download qpress deb if apt failed
+  ansible.builtin.get_url:
+    url:  "https://repo.percona.com/apt/pool/main/q/qpress/qpress_11-3.{{ ansible_lsb.codename }}_amd64.deb"
+    dest: "/tmp/qpress.deb"
+    mode: "0644"
+  when: qpress_apt.failed | default(false)
+
+- name: Install qpress from deb if apt failed
+  ansible.builtin.apt:
+    deb:   "/tmp/qpress.deb"
+    state: present
+  when: qpress_apt.failed | default(false)
+
+# ── Local storage setup ───────────────────────────────────────────────────────
+# Only runs when percona_ha_backup_storage is local
+- name: Create local backup directory
+  ansible.builtin.file:
+    path:  "{{ percona_ha_local_backup_path }}"
+    state: directory
+    owner: "{{ percona_ha_local_backup_owner }}"
+    group: "{{ percona_ha_local_backup_group }}"
+    mode:  "{{ percona_ha_local_backup_mode }}"
+  when: percona_ha_backup_storage == "local"
+
+# ── Common setup — runs for both storage types ────────────────────────────────
+- name: Create backup metadata directory
+  ansible.builtin.file:
+    path:  "{{ percona_ha_backup_lsn_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode:  "0755"
+
+- name: Create backup log file
+  ansible.builtin.file:
+    path:              "{{ percona_ha_backup_log_file }}"
+    state:             touch
+    owner:             root
+    group:             root
+    mode:              "0644"
+    modification_time: preserve
+    access_time:       preserve
+
+# ── Deploy correct backup scripts based on storage type ───────────────────────
+# minio → mysql-full-backup-minio.sh.j2
+# local → mysql-full-backup-local.sh.j2
+- name: Deploy full backup script
+  ansible.builtin.template:
+    src:   "mysql-full-backup-{{ percona_ha_backup_storage }}.sh.j2"
+    dest:  "{{ percona_ha_backup_scripts_path }}/mysql-full-backup.sh"
+    owner: root
+    group: root
+    mode:  "0755"
+
+- name: Deploy incremental backup script
+  ansible.builtin.template:
+    src:   "mysql-incremental-backup-{{ percona_ha_backup_storage }}.sh.j2"
+    dest:  "{{ percona_ha_backup_scripts_path }}/mysql-incremental-backup.sh"
+    owner: root
+    group: root
+    mode:  "0755"
+
+# ── Cron jobs — same for both storage types ───────────────────────────────────
+- name: Setup full backup cron job
+  ansible.builtin.cron:
+    name:    "MySQL HA full backup — weekly"
+    minute:  "{{ percona_ha_backup_full_cron_minute }}"
+    hour:    "{{ percona_ha_backup_full_cron_hour }}"
+    weekday: "{{ percona_ha_backup_full_cron_weekday }}"
+    job:     "{{ percona_ha_backup_scripts_path }}/mysql-full-backup.sh >> {{ percona_ha_backup_log_file }} 2>&1"
+    user:    root
+    state:   present
+  when: >
+    percona_setup_backup_cron | default(false) or
+    percona_backup_server | default(false)
+
+- name: Setup incremental backup cron job
+  ansible.builtin.cron:
+    name:    "MySQL HA incremental backup — daily"
+    minute:  "{{ percona_ha_backup_inc_cron_minute }}"
+    hour:    "{{ percona_ha_backup_inc_cron_hour }}"
+    weekday: "{{ percona_ha_backup_inc_cron_weekday }}"
+    job:     "{{ percona_ha_backup_scripts_path }}/mysql-incremental-backup.sh >> {{ percona_ha_backup_log_file }} 2>&1"
+    user:    root
+    state:   present
+  when: >
+    percona_setup_backup_cron | default(false) or
+    percona_backup_server | default(false)

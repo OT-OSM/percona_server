@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# MinIO Client (mc) Configuration
+# =============================================================================
+
+- name: Check if mc client already exists
+  ansible.builtin.stat:
+    path: "{{ percona_ha_mc_install_path }}"
+  register: mc_binary_stat
+
+- name: Download MinIO client (mc)
+  ansible.builtin.get_url:
+    url: "https://dl.min.io/client/mc/release/linux-amd64/mc"
+    dest: "{{ percona_ha_mc_install_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+  when: not mc_binary_stat.stat.exists
+
+- name: Configure mc alias for company MinIO
+  ansible.builtin.command: >
+    {{ percona_ha_mc_install_path }} alias set {{ percona_ha_minio_alias }}
+    {{ percona_ha_minio_endpoint }}
+    {{ percona_ha_minio_root_user }}
+    {{ percona_ha_minio_root_password }}
+    --insecure
+  changed_when: false
+  no_log: true
+
+- name: Verify MinIO connection
+  ansible.builtin.command: >
+    {{ percona_ha_mc_install_path }} ls {{ percona_ha_minio_alias }}/ --insecure
+  changed_when: false
+  register: minio_check
+  failed_when: minio_check.rc != 0
+
+- name: Ensure MinIO bucket exists
+  ansible.builtin.command: >
+    {{ percona_ha_mc_install_path }} mb --ignore-existing
+    {{ percona_ha_minio_alias }}/{{ percona_ha_minio_bucket }}
+    --insecure
+  changed_when: false
+  when: percona_minio_configure | bool
+
+- name: Create failover-resync folder in MinIO bucket
+  ansible.builtin.command: >
+    {{ percona_ha_mc_install_path }} mb --ignore-existing
+    {{ percona_ha_minio_alias }}/{{ percona_ha_minio_bucket }}/{{ percona_ha_minio_resync_folder }}
+    --insecure
+  changed_when: false
+  when: percona_minio_configure | bool

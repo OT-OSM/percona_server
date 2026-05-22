@@ -1,0 +1,35 @@
+{{ ansible_managed | comment }}
+
+[Unit]
+Description=MinIO Object Storage
+Documentation=https://docs.min.io
+After=network.target
+Wants=network-online.target
+
+[Service]
+User={{ percona_ha_minio_system_user }}
+Group={{ percona_ha_minio_system_user }}
+
+ExecStart={{ percona_ha_minio_install_path }} server {{ percona_ha_minio_datadir }} \
+  --console-address ":{{ percona_ha_minio_console_port }}" \
+  --address ":{{ percona_ha_minio_port }}"
+
+Environment="MINIO_ROOT_USER={{ percona_ha_minio_root_user }}"
+Environment="MINIO_ROOT_PASSWORD={{ percona_ha_minio_root_password }}"
+
+WorkingDirectory={{ percona_ha_minio_datadir }}
+
+Restart=always
+RestartSec=10
+
+LimitNOFILE=65536
+TasksMax=infinity
+TimeoutStopSec=infinity
+SendSIGKILL=no
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

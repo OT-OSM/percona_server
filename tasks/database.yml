@@ -1,14 +1,15 @@
----
 - name: Ensure MySQL databases are present.
   community.mysql.mysql_db:
-    login_password: "{{ mysql_root_password }}"
-    login_port: "{{ mysql_port }}"
-    name: "{{ item.name }}"
-    collation: "{{ item.collation | default('utf8_general_ci') }}"
-    encoding: "{{ item.encoding | default('utf8') }}"
-    state: "{{ item.state | default('present') }}"
-  with_items: "{{ mysql_databases }}"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    login_port:     "{{ percona_port }}"
+    name:           "{{ item.name }}"
+    collation:      "{{ item.collation | default('utf8_general_ci') }}"
+    encoding:       "{{ item.encoding | default('utf8') }}"
+    state:          "{{ item.state | default('present') }}"
+  with_items: "{{ percona_databases }}"
   tags:
     - create_database
   when:
-    - inventory_hostname not in groups['slave']
+    - percona_databases | length > 0
+    - inventory_hostname not in groups[percona_slave_group] | default([])

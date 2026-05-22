@@ -1,0 +1,52 @@
+# =============================================================================
+# ProxySQL Installation
+# =============================================================================
+
+- name: Check if ProxySQL already installed
+  ansible.builtin.stat:
+    path: /usr/bin/proxysql
+  register: proxysql_binary_stat
+
+- name: Download ProxySQL package
+  ansible.builtin.get_url:
+    url: "{{ percona_ha_proxysql_download_url }}"
+    dest: "{{ percona_ha_proxysql_tmp_package }}"
+    mode: "0644"
+  when:
+    - percona_proxysql_install | bool
+    - not proxysql_binary_stat.stat.exists
+
+- name: Install ProxySQL package
+  ansible.builtin.apt:
+    deb: "{{ percona_ha_proxysql_tmp_package }}"
+    state: present
+  when:
+    - percona_proxysql_install | bool
+    - not proxysql_binary_stat.stat.exists
+  notify: Reload systemd
+
+- name: Fix ProxySQL systemd service — remove stale PID on start
+  ansible.builtin.lineinfile:
+    path: /lib/systemd/system/proxysql.service
+    insertafter: '^\[Service\]'
+    line: "ExecStartPre=/bin/rm -f {{ percona_ha_proxysql_pid_file }}"
+    state: present
+  when: percona_proxysql_install | bool
+  notify: Reload systemd
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start ProxySQL service
+  ansible.builtin.service:
+    name: "{{ percona_ha_proxysql_service_name }}"
+    state: started
+    enabled: true
+  when: percona_proxysql_install | bool
+
+- name: Wait for ProxySQL admin port to be ready
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ percona_ha_proxysql_admin_port }}"
+    timeout: 30
+  when: percona_proxysql_install | bool

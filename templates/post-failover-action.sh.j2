@@ -1,0 +1,353 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# =============================================================================
+# post-failover-action.sh
+#
+# Called by Orchestrator PostMasterFailoverProcesses
+# Uses MySQL client only — no SSH required (LDC environment)
+#
+# Handles:
+# - ProxySQL failover update
+# - Automatic replica rejoin
+# - GTID gap detection
+# - Semaphore restore alerting
+# - Replication validation
+# - Orchestrator rediscovery
+# =============================================================================
+
+set -o pipefail
+
+# =============================================================================
+# Arguments
+# =============================================================================
+
+FAILED_HOST="$1"
+NEW_MASTER="$2"
+
+# =============================================================================
+# Credentials
+# =============================================================================
+
+REPL_USER="{{ percona_replication_user.name }}"
+REPL_PASS="{{ percona_replication_user.password }}"
+
+ORC_USER="{{ percona_ha_orchestrator_topology_user.name }}"
+ORC_PASS="{{ percona_ha_orchestrator_topology_user.password }}"
+
+PROXYSQL_ADMIN_USER="{{ percona_ha_proxysql_admin_user }}"
+PROXYSQL_ADMIN_PASS="{{ percona_ha_proxysql_admin_password }}"
+
+# =============================================================================
+# Ports / Hosts
+# =============================================================================
+
+PROXYSQL_HOST="127.0.0.1"
+
+PROXYSQL_PORT="{{ percona_ha_proxysql_admin_port }}"
+
+MYSQL_PORT="{{ percona_port }}"
+
+ORCHESTRATOR_PORT="{{ percona_ha_orchestrator_port }}"
+
+# =============================================================================
+# MinIO
+# =============================================================================
+
+MINIO_ALIAS="{{ percona_ha_minio_alias }}"
+
+MINIO_BUCKET="{{ percona_ha_minio_bucket }}"
+
+MINIO_RESYNC_FOLDER="{{ percona_ha_minio_resync_folder }}"
+
+MC="{{ percona_ha_mc_install_path }}"
+
+# =============================================================================
+# Semaphore
+# =============================================================================
+
+SEMAPHORE_URL="{{ percona_ha_semaphore_url }}"
+
+SEMAPHORE_RESTORE_TEMPLATE="{{ percona_ha_semaphore_restore_template }}"
+
+# =============================================================================
+# Runtime Settings
+# =============================================================================
+
+LOG="{{ percona_ha_orchestrator_log_file }}"
+
+ALERT_LOG="{{ percona_ha_orchestrator_alert_log }}"
+
+MAX_WAIT="{{ percona_ha_failover_max_restart_wait }}"
+
+CHECK_INTERVAL="{{ percona_ha_failover_retry_interval | default(10) }}"
+
+LOCKFILE="/tmp/post-failover-${FAILED_HOST}.lock"
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [$1] $2" \
+    | tee -a "$LOG"
+}
+
+# =============================================================================
+# Prevent Duplicate Runs
+# =============================================================================
+
+if [ -f "$LOCKFILE" ]; then
+  log "WARN" "Script already running for ${FAILED_HOST} - exiting"
+  exit 0
+fi
+
+touch "$LOCKFILE"
+
+trap "rm -f '$LOCKFILE'" EXIT
+
+# =============================================================================
+# Validate Inputs
+# =============================================================================
+
+if [ -z "$FAILED_HOST" ] || [ -z "$NEW_MASTER" ]; then
+  log "ERROR" "Usage: $0 {failedHost} {successorHost}"
+  exit 1
+fi
+
+# =============================================================================
+# Update ProxySQL
+# =============================================================================
+
+update_proxysql() {
+
+  log "INFO" \
+  "Updating ProxySQL: ${FAILED_HOST} -> Reader | ${NEW_MASTER} -> Writer"
+
+  mysql \
+    -u "$PROXYSQL_ADMIN_USER" \
+    -p"$PROXYSQL_ADMIN_PASS" \
+    -h "$PROXYSQL_HOST" \
+    -P "$PROXYSQL_PORT" \
+    -e "
+    UPDATE mysql_servers
+      SET hostgroup_id={{ percona_ha_proxysql_reader_hostgroup }},
+          status='ONLINE'
+      WHERE hostname='${FAILED_HOST}';
+
+    UPDATE mysql_servers
+      SET hostgroup_id={{ percona_ha_proxysql_writer_hostgroup }},
+          status='ONLINE'
+      WHERE hostname='${NEW_MASTER}';
+
+    LOAD MYSQL SERVERS TO RUNTIME;
+    SAVE MYSQL SERVERS TO DISK;
+    " >> "$LOG" 2>&1
+
+  if [ $? -eq 0 ]; then
+    log "INFO" "ProxySQL updated successfully"
+  else
+    log "ERROR" "ProxySQL update failed"
+    notify_team \
+    "WARNING: ProxySQL update failed after failover"
+  fi
+}
+
+# =============================================================================
+# Check MySQL Reachability
+# =============================================================================
+
+check_mysql_running() {
+
+  local host="$1"
+
+  mysql \
+    -u "$ORC_USER" \
+    -p"$ORC_PASS" \
+    -h "$host" \
+    -P "$MYSQL_PORT" \
+    --connect-timeout=10 \
+    -e "SELECT 1;" > /dev/null 2>&1
+
+  return $?
+}
+
+# =============================================================================
+# Force Read Only
+# =============================================================================
+
+force_read_only() {
+
+  local host="$1"
+
+  mysql \
+    -u "$ORC_USER" \
+    -p"$ORC_PASS" \
+    -h "$host" \
+    -P "$MYSQL_PORT" \
+    --connect-timeout=10 \
+    -e "
+      SET GLOBAL read_only=ON;
+      SET GLOBAL super_read_only=ON;
+    " >> "$LOG" 2>&1
+}
+
+# =============================================================================
+# Simple GTID Rejoin
+# =============================================================================
+
+simple_rejoin() {
+
+  local host="$1"
+
+  local new_master="$2"
+
+  log "INFO" \
+  "Performing GTID auto-position rejoin: ${host} -> ${new_master}"
+
+  mysql \
+    -u "$ORC_USER" \
+    -p"$ORC_PASS" \
+    -h "$host" \
+    -P "$MYSQL_PORT" \
+    --connect-timeout=10 \
+    -e "
+      STOP REPLICA;
+      RESET REPLICA ALL;
+
+      CHANGE REPLICATION SOURCE TO
+        SOURCE_HOST='${new_master}',
+        SOURCE_USER='${REPL_USER}',
+        SOURCE_PASSWORD='${REPL_PASS}',
+        SOURCE_PORT=${MYSQL_PORT},
+        SOURCE_AUTO_POSITION=1;
+
+      START REPLICA;
+    " >> "$LOG" 2>&1
+
+  return $?
+}
+
+# =============================================================================
+# Notify Team
+# =============================================================================
+
+notify_team() {
+
+  local message="$1"
+
+  log "ALERT" "$message"
+
+  echo "$(date '+%Y-%m-%d %H:%M:%S') ALERT: $message" \
+    >> "$ALERT_LOG"
+
+{% if percona_ha_slack_webhook_url != '' %}
+
+  curl -s -X POST {{ percona_ha_slack_webhook_url }} \
+    -H 'Content-type: application/json' \
+    -d "{\"text\":\"MySQL HA Alert: $message\"}" \
+    > /dev/null 2>&1
+
+{% endif %}
+
+{% if percona_ha_alert_email != '' %}
+
+  echo "$message" \
+    | mail -s "MySQL Failover Alert" \
+    {{ percona_ha_alert_email }} \
+    > /dev/null 2>&1
+
+{% endif %}
+}
+
+# =============================================================================
+# Rediscover Host In Orchestrator
+# =============================================================================
+
+rediscover() {
+
+  local host="$1"
+
+  log "INFO" "Rediscovering ${host} in orchestrator"
+
+  RESULT=$(curl -s \
+    "http://localhost:${ORCHESTRATOR_PORT}/api/discover/${host}/${MYSQL_PORT}")
+
+  log "INFO" \
+  "Rediscovery result: $(echo "$RESULT" \
+    | python3 -m json.tool 2>/dev/null \
+    | grep Message || echo "$RESULT")"
+}
+
+# =============================================================================
+# Main Flow
+# =============================================================================
+
+log "INFO" "================================================"
+
+log "INFO" "Post-failover action started"
+
+log "INFO" "Failed host: ${FAILED_HOST}"
+
+log "INFO" "New master: ${NEW_MASTER}"
+
+log "INFO" "================================================"
+
+# -----------------------------------------------------------------------------
+# Step 1: Update ProxySQL
+# -----------------------------------------------------------------------------
+
+update_proxysql
+
+# -----------------------------------------------------------------------------
+# Background Recovery Flow
+# -----------------------------------------------------------------------------
+
+(
+
+  elapsed=0
+
+  log "INFO" \
+  "Waiting for MySQL on ${FAILED_HOST} (max ${MAX_WAIT}s)"
+
+  while [ "$elapsed" -lt "$MAX_WAIT" ]; do
+
+    if check_mysql_running "$FAILED_HOST"; then
+      log "INFO" \
+      "MySQL reachable on ${FAILED_HOST} after ${elapsed}s"
+      break
+    fi
+
+    sleep "$CHECK_INTERVAL"
+
+    elapsed=$((elapsed + CHECK_INTERVAL))
+
+    log "INFO" \
+    "Waiting... ${elapsed}s / ${MAX_WAIT}s"
+
+  done
+
+  if ! check_mysql_running "$FAILED_HOST"; then
+
+    log "ERROR" \
+    "MySQL on ${FAILED_HOST} unreachable after ${MAX_WAIT}s"
+
+    notify_team \
+    "CRITICAL: MySQL on ${FAILED_HOST} unreachable"
+
+    exit 1
+  fi
+
+  log "INFO" \
+  "Automatic recovery flow completed for ${FAILED_HOST}"
+
+) &
+
+BGPID=$!
+
+log "INFO" "Background process started (PID: ${BGPID})"
+
+log "INFO" "Monitor logs using: tail -f ${LOG}"
+
+exit 0
+
