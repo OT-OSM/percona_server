@@ -1,136 +1,183 @@
 [![Apache License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/OT-OSM/mysql)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/OT-OSM/percona_server)
 
 [![Opstree Solutions][opstree_avatar]][opstree_homepage]<br/>[Opstree Solutions][opstree_homepage]
 
   [opstree_homepage]: https://opstree.github.io/
   [opstree_avatar]: https://img.cloudposse.com/150x150/https://github.com/opstree.png
 
-# Percona Server
+# Percona Server HA
 
-A production-grade Ansible role to install and configure **Percona Server 8.0** on Ubuntu with CIS best practices, optional master-slave replication, XtraBackup-based backup management, and Prometheus metrics export.
+A production-grade Ansible role to install, configure, and manage **Percona Server 8.0** on Ubuntu with full High Availability support including Master-Slave replication, automated failover via Orchestrator, query routing via ProxySQL, XtraBackup-based backup to MinIO or local disk, and Prometheus metrics via mysqld_exporter and PMM.
 
 ## Key Features
 
-- [X] CIS Benchmark hardening (`validate_password`, `skip-grant-tables=OFF`, `local-infile=0`, etc.)
-- [X] Standalone or Master/Slave replication topology
-- [X] Percona XtraBackup with AES-256 encryption (key preserved across runs)
-- [X] Prometheus `mysqld_exporter` integration (togglable)
-- [X] Database and User lifecycle management
-- [X] Idempotent — safe to re-run without side effects
+- [x] Percona Server 8.0 installation on Ubuntu 20.04 / 22.04
+- [x] Master-Slave replication with GTID mode
+- [x] Automated failover via Orchestrator (~30s RTO)
+- [x] Query routing via ProxySQL (writes → master, reads → slave)
+- [x] XtraBackup — weekly full + daily incremental backup
+- [x] Backup storage toggle — MinIO (object storage) or local disk
+- [x] MinIO client (mc) installation and configuration
+- [x] mysqld_exporter for Prometheus metrics (togglable)
+- [x] PMM (Percona Monitoring and Management) integration (togglable)
+- [x] Post-failover automation script for slave resync via Semaphore
+- [x] Database and User lifecycle management
+- [x] Auto-calculated memory settings based on system RAM
+- [x] Idempotent — safe to re-run without side effects
+- [x] All variables prefixed with `percona_` — no conflicts with other roles
+
+---
 
 ## Requirements
 
-- Ubuntu `focal` (20.04) or `bionic` (18.04)
+- Ubuntu `focal` (20.04) or `jammy` (22.04)
 - Root/sudo access on target hosts
-- `community.mysql` Ansible collection (`ansible-galaxy collection install community.mysql`)
+- `community.mysql` Ansible collection:
 
-> **Security Note:** All passwords have defaults set in `defaults/main.yml` for reference only.  
-> **Always override passwords using [Ansible Vault](https://docs.ansible.com/ansible/latest/vault_guide/) in `group_vars` or `host_vars`.**
+```bash
+ansible-galaxy collection install community.mysql
+```
+
+> **Security Note:** All passwords have placeholder defaults in `defaults/main.yml`.
+> **Always override passwords via Semaphore environment variables or Ansible Vault.**
 
 ---
 
 ## Role Variables
 
-Variables are split into **`defaults/main.yml`** (user-overridable) and **`vars/main.yml`** (internal role constants).
-
-### 🔐 Credentials — Override via Ansible Vault
-
-| Variable | Default Value | Description |
-|----------|---------------|-------------|
-| `mysql_root_password` | `N0Tweak$_@123!` | MySQL root user password |
-| `mysql_replication_user.name` | `slave` | Replication user name |
-| `mysql_replication_user.password` | `slaveMaster@123!` | Replication user password |
-| `mysql_backup_user.name` | `backup` | XtraBackup user name |
-| `mysql_backup_user.password` | `backUpMaster@123!` | XtraBackup user password |
-| `mysql_exporter_db_password` | `StrongExporterPassword123!` | mysqld_exporter DB user password |
-
-### 🔧 Feature Toggles
+### 🔧 Feature Toggles — Percona Server
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `replication` | `false` | Enable master-slave replication setup |
-| `backup` | `false` | Enable Percona XtraBackup server setup |
-| `database_creation` | `true` | Run database creation tasks |
-| `users_creation` | `true` | Run user creation tasks |
-| `mysql_metrics_enabled` | `true` | Install and configure `mysqld_exporter` |
-| `mysql_root_password_update` | `false` | Force update of the root password |
-| `mysql_install_packages` | `true` | Set `false` to skip installation (config-only mode) |
+|---|---|---|
+| `percona_install_packages` | `true` | Install Percona Server packages |
+| `percona_replication` | `false` | Enable master-slave replication |
+| `percona_database_creation` | `true` | Run database creation tasks |
+| `percona_users_creation` | `true` | Run user creation tasks |
+| `percona_metrics_enabled` | `true` | Install and configure mysqld_exporter |
+| `percona_root_password_update` | `false` | Force update of root password |
+
+### 🔧 Feature Toggles — HA Components
+
+| Variable | Default | Description |
+|---|---|---|
+| `percona_orchestrator_install` | `false` | Install Orchestrator |
+| `percona_orchestrator_configure` | `false` | Configure Orchestrator |
+| `percona_proxysql_install` | `false` | Install ProxySQL |
+| `percona_proxysql_configure` | `false` | Configure ProxySQL |
+| `percona_minio_configure` | `false` | Install and configure mc client |
+| `percona_configure_replication_users` | `false` | Create HA replication users |
+| `percona_deploy_failover_script` | `false` | Deploy post-failover script |
+| `percona_deploy_backup_scripts` | `false` | Deploy backup scripts and cron |
+| `percona_setup_backup_cron` | `false` | Enable backup cron jobs |
+| `percona_backup_server` | `false` | Mark node as backup server |
+| `percona_pmm_enabled` | `false` | Enable PMM monitoring |
+
+### 🔐 Credentials — Override via Vault
+
+| Variable | Default | Description |
+|---|---|---|
+| `percona_root_username` | `root` | MySQL root username |
+| `percona_root_password` | `changeme` | MySQL root password |
+| `percona_ha_replication_user.password` | `changeme` | Replication user password |
+| `percona_ha_orchestrator_topology_user.password` | `changeme` | Orchestrator topology password |
+| `percona_ha_proxysql_admin_password` | `changeme` | ProxySQL admin password |
+| `percona_ha_minio_root_password` | `changeme` | MinIO root password |
+| `percona_exporter_db_password` | `changeme` | mysqld_exporter DB password |
+| `percona_ha_pmm_password` | `changeme` | PMM admin password |
 
 ### 🛠 MySQL Connection & General
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `version` | `"8.0"` | Percona version to install (`"8.0"`) |
-| `mysql_port` | `"3306"` | MySQL listen port |
-| `mysql_bind_address` | `0.0.0.0` | MySQL bind address |
-| `mysql_datadir` | `/var/lib/mysql` | MySQL data directory |
-| `mysql_skip_name_resolve` | `false` | Skip DNS resolution for connections |
-| `mysql_sql_mode` | `STRICT_ALL_TABLES` | MySQL SQL mode |
-| `mysql_config_file` | `/etc/mysql/my.cnf` | Main config file path |
-| `mysql_config_include_dir` | `/etc/mysql/conf.d` | Directory for extra config fragments |
+|---|---|---|
+| `percona_port` | `3306` | MySQL listen port |
+| `percona_bind_address` | `0.0.0.0` | MySQL bind address |
+| `percona_datadir` | `/var/lib/mysql` | MySQL data directory |
+| `percona_config_file` | `/etc/mysql/mysql.conf.d/mysqld.cnf` | Main config file |
+| `percona_daemon` | `mysql` | MySQL service name |
+| `percona_server_id` | `1` | Unique server ID — set per play |
 
 ### 📊 Memory & InnoDB Tuning
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `mysql_innodb_buffer_pool_size` | `256M` | InnoDB buffer pool (tune to ~70% RAM) |
-| `mysql_innodb_log_file_size` | `64M` | InnoDB log file (~25% of buffer pool) |
-| `mysql_max_connections` | `151` | Maximum client connections |
-| `mysql_max_allowed_packet` | `64M` | Max packet size |
-| `mysql_query_cache_type` | `0` | Query cache (disabled; removed in 8.0) |
-| `mysql_wait_timeout` | `28800` | Idle connection timeout (seconds) |
+Memory settings are auto-calculated based on `ansible_memtotal_mb`. Override in `vars/vars.yml` if needed.
 
-> See [defaults/main.yml](./defaults/main.yml) for the full list of tunable variables.
+| Variable | Calculation | Description |
+|---|---|---|
+| `percona_innodb_buffer_pool_size` | 70% of RAM (min 128M) | InnoDB buffer pool |
+| `percona_innodb_log_file_size` | 25% of buffer pool (min 64M) | InnoDB log file |
+| `percona_max_connections` | 20% of RAM in MB (min 50) | Max connections |
+| `percona_max_allowed_packet` | `64M` | Max packet size |
+| `percona_wait_timeout` | `28800` | Idle connection timeout (seconds) |
 
 ### 📦 Replication
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `mysql_server_id` | `"1"` | Unique server ID (set per-host in inventory) |
-| `mysql_binlog_format` | `MIXED` | Binlog format (`ROW`, `STATEMENT`, `MIXED`) |
-| `mysql_max_binlog_size` | `100M` | Max binlog file size |
-| `mysql_expire_logs_days` | `10` | Binlog retention in days |
+|---|---|---|
+| `percona_server_id` | `1` | Unique server ID — set per play |
+| `percona_gtid_mode` | `true` | Enable GTID mode |
+| `percona_binlog_format` | `ROW` | Binlog format |
+| `percona_max_binlog_size` | `100M` | Max binlog file size |
+| `percona_binlog_expire_logs_seconds` | `604800` | Binlog retention — 7 days |
 
 ### 📈 Prometheus Exporter
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `mysql_exporter_version` | `0.15.1` | `mysqld_exporter` release version |
-| `mysql_exporter_user` | `mysqld_exporter` | OS system user to run the exporter |
-| `mysql_exporter_port` | `9104` | Port to expose metrics |
-| `mysql_exporter_db_user` | `mysqld_exporter` | MySQL user for exporter (host: localhost) |
+|---|---|---|
+| `percona_exporter_version` | `0.15.1` | mysqld_exporter version |
+| `percona_exporter_user` | `mysqld_exporter` | OS system user |
+| `percona_exporter_port` | `9104` | Metrics port |
+| `percona_exporter_db_user` | `mysqld_exporter` | MySQL user for exporter |
+
+### 💾 Backup Settings
+
+| Variable | Default | Description |
+|---|---|---|
+| `percona_ha_backup_storage` | `minio` | Storage type — `minio` or `local` |
+| `percona_ha_backup_log_file` | `/var/log/mysql-backup.log` | Backup log file |
+| `percona_ha_backup_lsn_file` | `/var/lib/mysql-backup/last_lsn` | LSN tracking file |
+| `percona_ha_backup_full_retention_days` | `30` | Full backup retention days |
+| `percona_ha_backup_inc_retention_days` | `7` | Incremental backup retention days |
+| `percona_ha_local_backup_path` | `/var/backup/mysql` | Local backup path (local only) |
+| `percona_ha_backup_full_cron_weekday` | `0` | Full backup weekday (0=Sunday) |
+| `percona_ha_backup_inc_cron_weekday` | `1-6` | Incremental days (Mon-Sat) |
 
 ---
 
 ## Inventory
 
 ```ini
-[master]
-master_server1 mysql_server_id=1
+# =============================================================================
+# Percona MySQL HA — Inventory
+# =============================================================================
+# Notes:
+#   - percona_server_id must be unique across all nodes
+#   - Set percona_backup_server=true on slave that runs XtraBackup
+#   - Leave percona-master and percona-slave empty for standalone setup
+# =============================================================================
 
-[slave]
-slave_server1 mysql_server_id=2
-slave_server2 mysql_server_id=3 mysql_backup_server=true
+[percona-master]
+master_server percona_server_id=1
 
-[mysql]
-master_server1
-slave_server1
-slave_server2
+[percona-slave]
+slave_server1 percona_server_id=2
+slave_server2 percona_server_id=3 percona_backup_server=true
 
-[mysql_cluster:children]
-mysql
-master
-slave
+[percona-orchestrator]
+orchestrator_server
 
-[mysql_cluster:vars]
+[percona:children]
+percona-master
+percona-slave
+percona-orchestrator
+
+[percona:vars]
 ansible_user=ubuntu
 ```
 
 > **Notes:**
-> - Leave `[master]` and `[slave]` groups **empty** for a standalone single-node setup.
-> - Set `mysql_backup_server=true` on the host that should run XtraBackup.
-> - `mysql_server_id` **must be unique** across all nodes.
+> - Leave `[percona-master]` and `[percona-slave]` groups empty for a standalone single-node setup.
+> - Set `percona_backup_server=true` on the slave that should run XtraBackup.
+> - `percona_server_id` **must be unique** across all nodes.
 
 ---
 
@@ -138,74 +185,115 @@ ansible_user=ubuntu
 
 ```yaml
 ---
-- hosts: mysql_cluster
+# =============================================================================
+# MySQL HA — Percona Server + Orchestrator / ProxySQL / MinIO
+# =============================================================================
+- name: Configure MySQL Master
+  hosts: percona
+  become: true
   roles:
-    - role: percona_server
-      become: true
+    - mysql
 ```
 
 ### With Vault-encrypted passwords
 
 ```yaml
-# group_vars/mysql_cluster/vars.yml
-replication: true
-backup: true
-mysql_server_id: "{{ hostvars[inventory_hostname]['mysql_server_id'] }}"
+# playbooks/dev/percona-server/vars/vars.yml
+percona_root_username: "root"
+percona_gtid_mode:     true
 
-# group_vars/mysql_cluster/vault.yml  (ansible-vault encrypted)
-mysql_root_password: "YourStrongRootPassword!"
-mysql_replication_user:
-  name: replicator
-  password: "YourReplicationPassword!"
-mysql_backup_user:
-  name: xtrabackup
-  password: "YourBackupPassword!"
-mysql_exporter_db_password: "YourExporterPassword!"
+# Secrets — loaded from Semaphore environment variables
+percona_root_password: "{{ lookup('env', 'VAULT_MYSQL_ROOT_PASSWORD') }}"
+
+percona_ha_replication_user:
+  name:     "repl"
+  password: "{{ lookup('env', 'VAULT_REPL_PASSWORD') }}"
+  priv:     "*.*:REPLICATION SLAVE"
+
+percona_ha_orchestrator_topology_user:
+  name:     "orchestrator"
+  password: "{{ lookup('env', 'VAULT_ORC_PASSWORD') }}"
+
+percona_ha_proxysql_admin_password: "{{ lookup('env', 'VAULT_PROXYSQL_PASSWORD') }}"
+percona_ha_minio_root_password:     "{{ lookup('env', 'VAULT_MINIO_PASSWORD') }}"
+percona_exporter_db_password:       "{{ lookup('env', 'VAULT_EXPORTER_PASSWORD') }}"
+```
+
+---
+
+## Backup Storage Toggle
+
+```yaml
+# MinIO — streams backup directly to object storage (default)
+percona_ha_backup_storage: "minio"
+
+# Local disk — stores backup on local filesystem
+percona_ha_backup_storage: "local"
+percona_ha_local_backup_path: "/var/backup/mysql"
+```
+
+### MinIO Backup Structure
+
+```
+percona-backup/
+├── 2026-05-17-sunday/
+│   └── full_20260517_010001.xbstream.gz
+├── 2026-05-18-monday/
+│   └── inc_monday_20260518_010001.xbstream.gz
+├── 2026-05-19-tuesday/
+│   └── inc_tuesday_20260519_010001.xbstream.gz
+└── failover-resync/
 ```
 
 ---
 
 ## Usage
 
-```shell
-# Full role execution
-ansible-playbook -i hosts site.yml
+```bash
+# Full HA setup
+percona-server/playbook.yml
 
-# Configuration only (skip installation)
-ansible-playbook -i hosts site.yml -e "mysql_install_packages=false"
+# Configuration only — skip package installation
+percona-server/playbook.yml \
+  -e "percona_install_packages=false"
 
 # Create/update users only
-ansible-playbook -i hosts site.yml --tags "create_user"
+percona-server/playbook.yml \
+  --tags "create_user"
 
 # Create databases only
-ansible-playbook -i hosts site.yml --tags "create_database"
+percona-server/playbook.yml \
+  --tags "create_database"
 
-# Deploy/update metrics exporter only
-ansible-playbook -i hosts site.yml --tags "mysql_metrics"
+# Deploy backup scripts only
+percona-server/playbook.yml \
+  --tags "backup_scripts"
 
-# Disable exporter installation
-ansible-playbook -i hosts site.yml -e "mysql_metrics_enabled=false"
+# Deploy metrics exporter only
+percona-server/playbook.yml \
+  --tags "mysql_metrics"
+
+# Disable metrics exporter
+percona-server/playbook.yml \
+  -e "percona_metrics_enabled=false"
+
+# Run restore playbook
+ansible-playbook -i inventory playbooks/dev/percona-server/restore-playbook.yml \
+  -e "restore_source_host=192.168.8.61 restore_target_host=192.168.8.77"
 ```
-
----
-
-## Backup & Restore
-
-See **[BackupNRestore.md](./BackupNRestore.md)** for step-by-step backup and restore procedures using Percona XtraBackup with AES-256 encryption.
-
-> **Important:** The encryption key (`/backups/mysql/encryption_key`) is generated **once** on first run and preserved on subsequent runs. Back it up securely — without it, encrypted backups cannot be restored.
 
 ---
 
 ## References
 
-- *[Percona XtraBackup Documentation](https://docs.percona.com/percona-xtrabackup/latest/)*
-- *[Setup Slave for Replication](https://www.percona.com/doc/percona-xtrabackup/2.3/howtos/setting_up_replication.html)*
-- *[Configure Percona XtraBackup on Ubuntu](https://www.digitalocean.com/community/tutorials/how-to-configure-mysql-backups-with-percona-xtrabackup-on-ubuntu-16-04)*
-- *[Stay Away Replication Lag](https://blog.opstree.com/2019/03/26/stay-away-replication-lag/)*
-- *[MySQL Monitoring](https://blog.opstree.com/2019/07/23/mysql-monitoring/)*
-- *[Encrypt MySQL Data at Rest](https://blog.opstree.com/2019/09/24/mysql-data-at-rest-encryption/)*
-- *[Setting up MySQL Monitoring with Prometheus](https://blog.opstree.com/2018/12/11/setting-up-mysql-monitoring-with-prometheus/)*
+- [Percona Server Documentation](https://docs.percona.com/percona-server/8.0/)
+- [Percona XtraBackup Documentation](https://docs.percona.com/percona-xtrabackup/latest/)
+- [Orchestrator Documentation](https://github.com/openark/orchestrator/tree/master/docs)
+- [ProxySQL Documentation](https://proxysql.com/documentation/)
+- [MinIO Client Documentation](https://min.io/docs/minio/linux/reference/minio-mc.html)
+- [PMM Documentation](https://docs.percona.com/percona-monitoring-and-management/)
+- [Stay Away Replication Lag](https://blog.opstree.com/2019/03/26/stay-away-replication-lag/)
+- [MySQL Monitoring](https://blog.opstree.com/2019/07/23/mysql-monitoring/)
 
 ---
 
@@ -214,3 +302,5 @@ See **[BackupNRestore.md](./BackupNRestore.md)** for step-by-step backup and res
 **[Abhishek Dubey](abhishek.dubey@opstree.com)**
 
 **[Abhishek Vishwakarma](abhishek.vishwakarma@opstree.com)**
+
+**[Rajnish Sharma](rajnish.sharma@mygurukulam.co)**
