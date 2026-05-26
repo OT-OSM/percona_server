@@ -9,6 +9,8 @@
 # Percona Server HA
 
 A production-grade Ansible role to install, configure, and manage **Percona Server 8.0** on Ubuntu with full High Availability support including Master-Slave replication, automated failover via Orchestrator, query routing via ProxySQL, XtraBackup-based backup to MinIO or local disk, and Prometheus metrics via mysqld_exporter and PMM.
+## Architecture 
+<img width="1100" height="800" alt="image" src="https://github.com/user-attachments/assets/ccec916a-8062-45f2-8386-09c4baaf21af" />
 
 ## Key Features
 
@@ -81,10 +83,11 @@ ansible-galaxy collection install community.mysql
 | `percona_root_password` | `changeme` | MySQL root password |
 | `percona_ha_replication_user.password` | `changeme` | Replication user password |
 | `percona_ha_orchestrator_topology_user.password` | `changeme` | Orchestrator topology password |
+| `percona_ha_orchestrator_topology_user.password` | `changeme` | Orchestrator UI password |
 | `percona_ha_proxysql_admin_password` | `changeme` | ProxySQL admin password |
 | `percona_ha_minio_root_password` | `changeme` | MinIO root password |
 | `percona_exporter_db_password` | `changeme` | mysqld_exporter DB password |
-| `percona_ha_pmm_password` | `changeme` | PMM admin password |
+| `percona_ha_orchestrator_http_password:` | `changeme` | PMM admin password |
 
 ### 🛠 MySQL Connection & General
 
