@@ -67,7 +67,11 @@
 
   "UseSSL": false,
 
-  "AuthenticationMethod": "",
+  "AuthenticationMethod": "{{ percona_ha_orchestrator_auth_method | default('') }}",
+  
+  "HTTPAuthUser":         "{{ percona_ha_orchestrator_http_user | default('') }}",
+  
+  "HTTPAuthPassword":     "{{ percona_ha_orchestrator_http_password | default('') }}",
 
   "PostMasterFailoverProcesses": [
     "{{ percona_ha_failover_script_path }} {failedHost} {successorHost}"
