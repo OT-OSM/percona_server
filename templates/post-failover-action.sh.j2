@@ -35,6 +35,11 @@ REPL_PASS="{{ percona_replication_user.password }}"
 ORC_USER="{{ percona_ha_orchestrator_topology_user.name }}"
 ORC_PASS="{{ percona_ha_orchestrator_topology_user.password }}"
 
+# Orchestrator HTTP Basic Auth
+# Required since Orchestrator UI auth is enabled
+ORC_HTTP_USER="{{ percona_ha_orchestrator_http_user }}"
+ORC_HTTP_PASS="{{ percona_ha_orchestrator_http_password }}"
+
 PROXYSQL_ADMIN_USER="{{ percona_ha_proxysql_admin_user }}"
 PROXYSQL_ADMIN_PASS="{{ percona_ha_proxysql_admin_password }}"
 
@@ -270,7 +275,10 @@ rediscover() {
 
   log "INFO" "Rediscovering ${host} in orchestrator"
 
+  # Basic auth required — Orchestrator HTTP auth is enabled
+  # Credentials: ORC_HTTP_USER / ORC_HTTP_PASS
   RESULT=$(curl -s \
+    -u "${ORC_HTTP_USER}:${ORC_HTTP_PASS}" \
     "http://localhost:${ORCHESTRATOR_PORT}/api/discover/${host}/${MYSQL_PORT}")
 
   log "INFO" \
@@ -350,4 +358,3 @@ log "INFO" "Background process started (PID: ${BGPID})"
 log "INFO" "Monitor logs using: tail -f ${LOG}"
 
 exit 0
-
