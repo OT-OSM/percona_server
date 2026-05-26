@@ -305,6 +305,11 @@ percona_ha_orchestrator_hostname_resolve_method:             "none"
 percona_ha_orchestrator_mysql_hostname_resolve_method:       "none"
 percona_ha_orchestrator_reject_hostname_pattern:             ""
 
+# Orchestrator HTTP Auth
+percona_ha_orchestrator_auth_method:   ""
+percona_ha_orchestrator_http_user:     ""
+percona_ha_orchestrator_http_password: ""
+
 # =============================================================================
 # HA — PROXYSQL SETTINGS
 # Override percona_ha_proxysql_admin_password via: VAULT_PROXYSQL_PASSWORD
