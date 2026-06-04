@@ -114,6 +114,34 @@
     percona_backup_server | default(false)
 
 # ################################## #
+# TLS — SSL Certificate              #
+# MySQL SSL + ProxySQL SSL           #
+# Certs pre-placed on each server    #
+# at /etc/percona/ssl/ by security   #
+# team before running this role      #
+# Master + Slave: MySQL SSL          #
+# Orchestrator: ProxySQL SSL         #
+# ################################## #
+- name: Including tasks for TLS SSL Configuration
+  ansible.builtin.include_tasks: tls.yml
+  tags:
+    - tls
+  when: percona_tls_enabled | default(false)
+
+# ################################## #
+# Encryption at Rest                 #
+# InnoDB Keyring + Encryption        #
+# Runs on master + slave only        #
+# Enable AFTER TLS verified working  #
+# percona_encryption_enabled: true   #
+# ################################## #
+- name: Including tasks for Encryption at Rest
+  ansible.builtin.include_tasks: encryption.yml
+  tags:
+    - encryption
+  when: percona_encryption_enabled | default(false)
+
+# ################################## #
 # HA — PMM Monitoring Setup          #
 # ################################## #
 - name: Including tasks for PMM Monitoring Setup
