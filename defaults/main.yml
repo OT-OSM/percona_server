@@ -497,3 +497,49 @@ percona_ha_pmm_server_url_encoded: "https://admin:changeme@pmm.example.com"
 percona_ha_pmm_username:           "admin"
 percona_ha_pmm_password:           "changeme"
 percona_ha_pmm_client_version:     "3.5.0-7.noble"
+
+# =============================================================================
+# TLS — SSL Certificate Configuration
+# =============================================================================
+# Company provided certificates:
+#   fullchain.txt  → renamed to fullchain.pem  (cert + intermediate + root CA)
+#   private_key.txt → renamed to private_key.pem (private key — keep secret)
+#
+# Cert files placed in:
+#   playbooks/dev/percona-server/files/ssl/fullchain.pem
+#   playbooks/dev/percona-server/files/ssl/private_key.pem
+#
+# private_key.pem added to .gitignore — never committed to Git
+# =============================================================================
+percona_tls_enabled:              false
+percona_tls_cert_src:             "files/ssl/fullchain.pem"
+percona_tls_key_src:              "files/ssl/private_key.pem"
+percona_tls_dest_dir:             "/etc/percona/ssl"
+percona_tls_cert_file:            "{{ percona_tls_dest_dir }}/fullchain.pem"
+percona_tls_key_file:             "{{ percona_tls_dest_dir }}/private_key.pem"
+percona_tls_require_secure:       false
+
+# =============================================================================
+# ProxySQL SSL
+# =============================================================================
+# Frontend SSL — App → ProxySQL (port 6033)
+# Backend SSL  — ProxySQL → MySQL (port 3306)
+# Both use same company certificates
+# =============================================================================
+percona_ha_proxysql_frontend_ssl: false
+percona_ha_proxysql_backend_ssl:  false
+
+# =============================================================================
+# Encryption at Rest — InnoDB
+# =============================================================================
+# Uses MySQL keyring_file plugin
+# Encrypts:
+#   - InnoDB tablespaces (.ibd files)
+#   - Redo logs
+#   - Undo logs
+# Requires MySQL restart — plan maintenance window
+# Enable AFTER TLS is configured and verified
+# =============================================================================
+percona_encryption_enabled:   false
+percona_keyring_dir:          "/var/lib/mysql-keyring"
+percona_keyring_file_path:    "{{ percona_keyring_dir }}/keyring"
