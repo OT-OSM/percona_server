@@ -1,0 +1,107 @@
+---
+# =============================================================================
+# Encryption at Rest — InnoDB Keyring
+# =============================================================================
+# Enables InnoDB encryption using keyring_file plugin
+#
+# Encrypts:
+#   - InnoDB tablespaces (.ibd files)
+#   - Redo logs
+#   - Undo logs
+#
+# Prerequisites:
+#   - TLS must be configured first (percona_tls_enabled: true)
+#   - MySQL must be running
+#   - mysqld.cnf already has encryption directives via template
+#   - Requires MySQL restart — plan maintenance window
+#
+# Runs on master and slave only — NOT on orchestrator
+# Enable AFTER TLS verified working
+# =============================================================================
+
+- name: Encryption at Rest — MySQL nodes only
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+  block:
+
+    # ── Create keyring directory ──────────────────────────────────────────────
+    - name: Create keyring directory
+      ansible.builtin.file:
+        path:  "{{ percona_keyring_dir }}"
+        state: directory
+        owner: mysql
+        group: mysql
+        mode:  "0750"
+
+    # ── Restart MySQL to load keyring from mysqld.cnf ─────────────────────────
+    - name: Restart MySQL to apply keyring configuration
+      ansible.builtin.service:
+        name:  "{{ percona_daemon }}"
+        state: restarted
+
+    - name: Wait for MySQL to be ready after restart
+      ansible.builtin.wait_for:
+        host:    127.0.0.1
+        port:    "{{ percona_port }}"
+        timeout: 60
+        delay:   5
+
+    # ── Check keyring plugin loaded ───────────────────────────────────────────
+    - name: Check keyring plugin loaded
+      ansible.builtin.command: >
+        mysql
+        -u {{ percona_root_username }}
+        -p{{ percona_root_password }}
+        --protocol=TCP
+        -h 127.0.0.1
+        -e "SELECT PLUGIN_NAME, PLUGIN_STATUS
+            FROM information_schema.PLUGINS
+            WHERE PLUGIN_NAME LIKE '%keyring%';"
+      changed_when: false
+      register: keyring_status
+      no_log: true
+
+    - name: Show keyring plugin status
+      ansible.builtin.debug:
+        msg: "{{ keyring_status.stdout_lines }}"
+
+    # ── Verify encryption variables ───────────────────────────────────────────
+    - name: Verify encryption variables enabled
+      ansible.builtin.command: >
+        mysql
+        -u {{ percona_root_username }}
+        -p{{ percona_root_password }}
+        --protocol=TCP
+        -h 127.0.0.1
+        -e "SHOW VARIABLES LIKE 'default_table_encryption';
+            SHOW VARIABLES LIKE 'innodb_redo_log_encrypt';
+            SHOW VARIABLES LIKE 'innodb_undo_log_encrypt';
+            SHOW VARIABLES LIKE 'keyring_file_data';"
+      changed_when: false
+      register: encryption_verify
+      no_log: true
+
+    - name: Show encryption status
+      ansible.builtin.debug:
+        msg: "{{ encryption_verify.stdout_lines }}"
+
+    # ── Check encrypted tablespaces ───────────────────────────────────────────
+    - name: Check encrypted tablespaces
+      ansible.builtin.command: >
+        mysql
+        -u {{ percona_root_username }}
+        -p{{ percona_root_password }}
+        --protocol=TCP
+        -h 127.0.0.1
+        -e "SELECT NAME, ENCRYPTION
+            FROM information_schema.INNODB_TABLESPACES
+            WHERE ENCRYPTION = 'Y'
+            LIMIT 10;"
+      changed_when: false
+      register: encrypted_tables
+      no_log: true
+
+    - name: Show encrypted tablespaces
+      ansible.builtin.debug:
+        msg: "{{ encrypted_tables.stdout_lines }}"
