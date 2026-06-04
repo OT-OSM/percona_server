@@ -1,0 +1,327 @@
+---
+# =============================================================================
+# TLS — MySQL SSL + ProxySQL SSL Configuration
+# =============================================================================
+# Certs pre-placed manually by security team on EACH node at:
+#   /etc/percona/ssl/fullchain.pem    (cert + intermediate + root CA)
+#   /etc/percona/ssl/private_key.pem  (private key)
+#
+# Role does NOT copy certs — only verifies exist then configures
+#
+# Security team SOP:
+#   1. SSH to each node (master, slave, orchestrator)
+#   2. sudo mkdir -p /etc/percona/ssl
+#   3. Create fullchain.pem + private_key.pem
+#   4. sudo chmod 644 fullchain.pem
+#   5. sudo chmod 600 private_key.pem
+#   6. Notify COE to run Ansible role
+# =============================================================================
+
+# ── Create SSL directory if not exists ────────────────────────────────────────
+- name: Create SSL certificate directory
+  ansible.builtin.file:
+    path:  "{{ percona_tls_dest_dir }}"
+    state: directory
+    mode:  "0755"
+
+# ── Verify certs exist on target ──────────────────────────────────────────────
+- name: Check fullchain cert exists on target
+  ansible.builtin.stat:
+    path: "{{ percona_tls_cert_file }}"
+  register: cert_stat
+
+- name: Check private key exists on target
+  ansible.builtin.stat:
+    path: "{{ percona_tls_key_file }}"
+  register: key_stat
+
+- name: Fail if certificate not found
+  ansible.builtin.fail:
+    msg: >
+      Certificate not found at {{ percona_tls_cert_file }}
+      on host {{ inventory_hostname }}.
+      Please place cert at {{ percona_tls_dest_dir }}/
+      before running this role.
+  when: not cert_stat.stat.exists
+
+- name: Fail if private key not found
+  ansible.builtin.fail:
+    msg: >
+      Private key not found at {{ percona_tls_key_file }}
+      on host {{ inventory_hostname }}.
+      Please place key at {{ percona_tls_dest_dir }}/
+      before running this role.
+  when: not key_stat.stat.exists
+
+# ── Fix ownership — only if mysql user exists ─────────────────────────────────
+- name: Check if mysql user exists
+  ansible.builtin.command: id mysql
+  changed_when: false
+  failed_when:  false
+  register: mysql_user_check
+
+- name: Set correct ownership on SSL directory
+  ansible.builtin.file:
+    path:    "{{ percona_tls_dest_dir }}"
+    owner:   mysql
+    group:   mysql
+    recurse: true
+  when: mysql_user_check.rc == 0
+
+- name: Set permissions on SSL directory
+  ansible.builtin.file:
+    path:  "{{ percona_tls_dest_dir }}"
+    mode:  "0755"
+
+- name: Set correct permissions on certificate
+  ansible.builtin.file:
+    path:  "{{ percona_tls_cert_file }}"
+    mode:  "0644"
+
+- name: Set correct permissions on private key
+  ansible.builtin.file:
+    path:  "{{ percona_tls_key_file }}"
+    mode:  "0600"
+
+# ── Show certificate details ──────────────────────────────────────────────────
+- name: Check certificate expiry and subject
+  ansible.builtin.command: >
+    openssl x509
+    -in {{ percona_tls_cert_file }}
+    -noout -subject -issuer -dates
+  changed_when: false
+  register: cert_info
+
+- name: Show certificate details
+  ansible.builtin.debug:
+    msg: "{{ cert_info.stdout_lines }}"
+
+# =============================================================================
+# MySQL SSL — master and slave only
+# mysqld.cnf template already has SSL directives
+# Restart MySQL to pick up SSL config
+# =============================================================================
+
+- name: Restart MySQL to apply SSL configuration
+  ansible.builtin.service:
+    name:  "{{ percona_daemon }}"
+    state: restarted
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+- name: Wait for MySQL to be ready after restart
+  ansible.builtin.wait_for:
+    host:    127.0.0.1
+    port:    "{{ percona_port }}"
+    timeout: 60
+    delay:   5
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+# ── Verify MySQL SSL enabled ──────────────────────────────────────────────────
+- name: Verify MySQL SSL status
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
+    -e "SHOW VARIABLES LIKE 'have_ssl';
+        SHOW VARIABLES LIKE 'ssl_cert';
+        SHOW VARIABLES LIKE 'ssl_ca';
+        SHOW VARIABLES LIKE 'require_secure_transport';"
+  changed_when: false
+  register: mysql_ssl_status
+  no_log: true
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+- name: Show MySQL SSL status
+  ansible.builtin.debug:
+    msg: "{{ mysql_ssl_status.stdout_lines }}"
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+# ── Test SSL connection ───────────────────────────────────────────────────────
+- name: Test SSL connection to MySQL
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
+    --ssl-mode=REQUIRED
+    -e "SHOW SESSION STATUS LIKE 'Ssl_cipher';
+        SELECT @@hostname;"
+  changed_when: false
+  register: ssl_test
+  no_log: true
+  failed_when: false
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+- name: Show SSL connection test result
+  ansible.builtin.debug:
+    msg: "{{ ssl_test.stdout_lines | default(['SSL test skipped']) }}"
+  when:
+    - inventory_hostname in groups[percona_master_group] | default([]) or
+      inventory_hostname in groups[percona_slave_group] | default([])
+
+# =============================================================================
+# ProxySQL SSL — orchestrator group only
+# =============================================================================
+
+# ── Verify certs exist on orchestrator ───────────────────────────────────────
+- name: Check cert exists on orchestrator node
+  ansible.builtin.stat:
+    path: "{{ percona_tls_cert_file }}"
+  register: orc_cert_stat
+  when:
+    - percona_ha_proxysql_backend_ssl | default(false) or
+      percona_ha_proxysql_frontend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+- name: Fail if cert missing on orchestrator
+  ansible.builtin.fail:
+    msg: >
+      Certificate not found at {{ percona_tls_cert_file }}
+      on orchestrator {{ inventory_hostname }}.
+      Please place certs at {{ percona_tls_dest_dir }}/ first.
+  when:
+    - percona_ha_proxysql_backend_ssl | default(false) or
+      percona_ha_proxysql_frontend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+    - not orc_cert_stat.stat.exists
+
+# ── ProxySQL backend SSL (ProxySQL → MySQL) ───────────────────────────────────
+- name: Configure ProxySQL backend SSL variables
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "
+      SET mysql-ssl_p2s_ca   = '{{ percona_tls_cert_file }}';
+      SET mysql-ssl_p2s_cert = '{{ percona_tls_cert_file }}';
+      SET mysql-ssl_p2s_key  = '{{ percona_tls_key_file }}';
+      LOAD MYSQL VARIABLES TO RUNTIME;
+      SAVE MYSQL VARIABLES TO DISK;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  when:
+    - percona_ha_proxysql_backend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+- name: Enable SSL on ProxySQL backend servers
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "
+      UPDATE mysql_servers SET use_ssl=1;
+      LOAD MYSQL SERVERS TO RUNTIME;
+      SAVE MYSQL SERVERS TO DISK;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  when:
+    - percona_ha_proxysql_backend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+# ── ProxySQL frontend SSL (App → ProxySQL) ────────────────────────────────────
+- name: Enable ProxySQL frontend SSL
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "
+      SET mysql-have_ssl=true;
+      LOAD MYSQL VARIABLES TO RUNTIME;
+      SAVE MYSQL VARIABLES TO DISK;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  when:
+    - percona_ha_proxysql_frontend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+# ── Reload ProxySQL TLS — no restart needed ───────────────────────────────────
+- name: Reload ProxySQL TLS without restart
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "PROXYSQL RELOAD TLS;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+  failed_when: false
+  when:
+    - percona_ha_proxysql_frontend_ssl | default(false)
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+# ── Verify ProxySQL SSL ───────────────────────────────────────────────────────
+- name: Verify ProxySQL SSL configuration
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "SELECT variable_name, variable_value
+          FROM global_variables
+          WHERE variable_name LIKE 'mysql-ssl%'
+             OR variable_name = 'mysql-have_ssl'
+          ORDER BY variable_name;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: proxysql_ssl_vars
+  when:
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+- name: Show ProxySQL SSL configuration
+  ansible.builtin.debug:
+    msg: "{{ proxysql_ssl_vars.stdout_lines }}"
+  when:
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+- name: Verify ProxySQL backend servers use_ssl=1
+  ansible.builtin.shell: |
+    mysql \
+      -u {{ percona_ha_proxysql_admin_user }} \
+      -p{{ percona_ha_proxysql_admin_password }} \
+      -h 127.0.0.1 \
+      -P {{ percona_ha_proxysql_admin_port }} \
+      -e "SELECT hostgroup_id, hostname, port, use_ssl, status
+          FROM mysql_servers
+          ORDER BY hostgroup_id;"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: proxysql_servers
+  when:
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
+
+- name: Show ProxySQL backend servers SSL status
+  ansible.builtin.debug:
+    msg: "{{ proxysql_servers.stdout_lines }}"
+  when:
+    - inventory_hostname in groups[percona_orchestrator_group] | default([])
