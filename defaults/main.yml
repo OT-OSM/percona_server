@@ -511,13 +511,11 @@ percona_ha_pmm_client_version:     "3.5.0-7.noble"
 #
 # private_key.pem added to .gitignore — never committed to Git
 # =============================================================================
-percona_tls_enabled:              false
-percona_tls_cert_src:             "files/ssl/fullchain.pem"
-percona_tls_key_src:              "files/ssl/private_key.pem"
-percona_tls_dest_dir:             "/etc/percona/ssl"
-percona_tls_cert_file:            "{{ percona_tls_dest_dir }}/fullchain.pem"
-percona_tls_key_file:             "{{ percona_tls_dest_dir }}/private_key.pem"
-percona_tls_require_secure:       false
+percona_tls_enabled:        false
+percona_tls_dest_dir:       "/etc/percona/ssl"
+percona_tls_cert_file:      "{{ percona_tls_dest_dir }}/fullchain.pem"
+percona_tls_key_file:       "{{ percona_tls_dest_dir }}/private_key.pem"
+percona_tls_require_secure: false
 
 # =============================================================================
 # ProxySQL SSL
