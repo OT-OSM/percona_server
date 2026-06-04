@@ -63,14 +63,9 @@
     enabled: true
   register: mysql_service_configuration
 
-# Flush handlers immediately after config — ensures MySQL restarts
-# before replication tasks run, picking up server-id and GTID settings
 - name: Flush handlers to apply config changes
   ansible.builtin.meta: flush_handlers
 
-# Explicit restart if config changed but MySQL was already running
-# (handler only fires on 'changed' — this catches reruns where config
-# was already written but MySQL never restarted to pick it up)
 - name: Restart MySQL if config was updated
   ansible.builtin.service:
     name:  "{{ percona_daemon }}"
@@ -79,10 +74,54 @@
 
 # =====================================================
 # SECTION 2 — Secure Installation
-# Uses password auth — caching_sha2_password (no socket auth)
-# Write operations master only — slave inherits via replication
 # =====================================================
 
+# ── Step 1: Check if root login works via socket (fresh install) ──────────────
+# Fresh Percona install uses auth_socket — no password set
+# Socket check: sudo mysql (no password needed)
+- name: Check if root can login via socket without password
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    --connect-timeout=10
+    -NBe "SELECT 1"
+  register: mysql_socket_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+# ── Step 2: Set root password via socket on fresh install ─────────────────────
+# Only runs when socket works AND password login fails
+# Sets mysql_native_password so role can use TCP auth going forward
+- name: Check MySQL login with password
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --connect-timeout=10
+    -NBe "SELECT 1"
+  register: mysql_password_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Set root password via socket — fresh install only
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    --connect-timeout=10
+    -NBe "ALTER USER '{{ percona_root_username }}'@'localhost'
+          IDENTIFIED WITH mysql_native_password
+          BY '{{ percona_root_password }}';
+          FLUSH PRIVILEGES;"
+  changed_when: true
+  no_log: true
+  when:
+    - mysql_socket_check.rc == 0
+    - mysql_password_check.rc != 0
+    - inventory_hostname not in groups[percona_slave_group] | default([])
+
+# ── Step 3: Verify password login works after setting ─────────────────────────
 - name: Check MySQL login with password
   ansible.builtin.command: >
     mysql
@@ -95,6 +134,7 @@
   failed_when: false
   no_log: true
 
+# ── Step 4: Secure installation tasks ─────────────────────────────────────────
 - name: Disallow root login remotely
   community.mysql.mysql_user:
     name:           "{{ percona_root_username }}"
