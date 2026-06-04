@@ -208,6 +208,48 @@ innodb_flush_log_at_trx_commit = {{ percona_innodb_flush_log_at_trx_commit }}
 innodb_lock_wait_timeout       = {{ percona_innodb_lock_wait_timeout }}
 
 # =============================================================================
+# SSL / TLS Configuration
+# =============================================================================
+# Company provided certificates deployed by roles/mysql/tasks/tls.yml
+# fullchain.pem  = server cert + intermediate CA + root CA
+# private_key.pem = private key (never committed to Git)
+# Certs stored at: {{ percona_tls_dest_dir }}
+# =============================================================================
+
+{% if percona_tls_enabled | default(false) %}
+
+ssl-ca   = {{ percona_tls_cert_file }}
+ssl-cert = {{ percona_tls_cert_file }}
+ssl-key  = {{ percona_tls_key_file }}
+
+{% if percona_tls_require_secure | default(false) %}
+# Force all connections to use TLS
+# Enable only after ALL clients support TLS
+require_secure_transport = ON
+{% endif %}
+
+{% endif %}
+
+# =============================================================================
+# Encryption at Rest — InnoDB Keyring
+# =============================================================================
+# Uses MySQL keyring_file plugin
+# Encrypts InnoDB tablespaces, redo logs, undo logs
+# Enable AFTER TLS is configured and verified
+# Requires MySQL restart — plan maintenance window
+# =============================================================================
+
+{% if percona_encryption_enabled | default(false) %}
+
+early-plugin-load        = keyring_file.so
+keyring_file_data        = {{ percona_keyring_file_path }}
+default_table_encryption = ON
+innodb_redo_log_encrypt  = ON
+innodb_undo_log_encrypt  = ON
+
+{% endif %}
+
+# =============================================================================
 # mysqldump
 # =============================================================================
 
