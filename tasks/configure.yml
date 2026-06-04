@@ -1,7 +1,5 @@
 # =============================================================================
 # Percona Server Configuration + Secure Installation
-# Section 1 — MySQL configuration, datadir, slow query log, service start
-# Section 2 — Secure installation (master only — slave inherits via replication)
 # =============================================================================
 
 # =====================================================
@@ -76,35 +74,25 @@
 # SECTION 2 — Secure Installation
 # =====================================================
 
-# ── Step 1: Check if root login works via socket (fresh install) ──────────────
-# Fresh Percona install uses auth_socket — no password set
-# Socket check: sudo mysql (no password needed)
-- name: Check if root can login via socket without password
+# ── Step 1: Check root auth plugin ───────────────────────────────────────────
+- name: Check root authentication plugin
   ansible.builtin.command: >
     mysql
     -u {{ percona_root_username }}
     --connect-timeout=10
-    -NBe "SELECT 1"
-  register: mysql_socket_check
+    -NBe "SELECT plugin FROM mysql.user
+          WHERE user='{{ percona_root_username }}'
+          AND host='localhost';"
+  register: root_auth_plugin
   changed_when: false
   failed_when: false
   no_log: true
 
-# ── Step 2: Set root password via socket on fresh install ─────────────────────
-# Only runs when socket works AND password login fails
-# Sets mysql_native_password so role can use TCP auth going forward
-- name: Check MySQL login with password
-  ansible.builtin.command: >
-    mysql
-    -u {{ percona_root_username }}
-    -p{{ percona_root_password }}
-    --connect-timeout=10
-    -NBe "SELECT 1"
-  register: mysql_password_check
-  changed_when: false
-  failed_when: false
-  no_log: true
+- name: Show root auth plugin
+  ansible.builtin.debug:
+    msg: "Root auth plugin: {{ root_auth_plugin.stdout }}"
 
+# ── Step 2: Set root password via socket if auth_socket ──────────────────────
 - name: Set root password via socket — fresh install only
   ansible.builtin.command: >
     mysql
@@ -117,16 +105,17 @@
   changed_when: true
   no_log: true
   when:
-    - mysql_socket_check.rc == 0
-    - mysql_password_check.rc != 0
+    - root_auth_plugin.stdout == "auth_socket"
     - inventory_hostname not in groups[percona_slave_group] | default([])
 
-# ── Step 3: Verify password login works after setting ─────────────────────────
+# ── Step 3: Verify password login works ──────────────────────────────────────
 - name: Check MySQL login with password
   ansible.builtin.command: >
     mysql
     -u {{ percona_root_username }}
     -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
     --connect-timeout=10
     -NBe "SELECT 1"
   register: mysql_login_check
@@ -134,14 +123,16 @@
   failed_when: false
   no_log: true
 
-# ── Step 4: Secure installation tasks ─────────────────────────────────────────
+# ── Step 4: Secure installation tasks ────────────────────────────────────────
 - name: Disallow root login remotely
   community.mysql.mysql_user:
-    name:           "{{ percona_root_username }}"
-    host:           "%"
-    state:          absent
-    login_user:     "{{ percona_root_username }}"
-    login_password: "{{ percona_root_password }}"
+    name:               "{{ percona_root_username }}"
+    host:               "%"
+    state:              absent
+    login_user:         "{{ percona_root_username }}"
+    login_password:     "{{ percona_root_password }}"
+    login_host:         "127.0.0.1"
+    login_port:         "{{ percona_port }}"
   when:
     - mysql_login_check.rc == 0
     - inventory_hostname in groups[percona_master_group] | default([])
@@ -151,6 +142,8 @@
     mysql
     -u {{ percona_root_username }}
     -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
     --connect-timeout=10
     -NBe 'SELECT Host FROM mysql.user WHERE User = ""'
   register: mysql_anonymous_hosts
@@ -167,6 +160,8 @@
     state:          absent
     login_user:     "{{ percona_root_username }}"
     login_password: "{{ percona_root_password }}"
+    login_host:     "127.0.0.1"
+    login_port:     "{{ percona_port }}"
   with_items: "{{ mysql_anonymous_hosts.stdout_lines | default([]) }}"
   when:
     - mysql_login_check.rc == 0
@@ -177,6 +172,8 @@
     mysql
     -u {{ percona_root_username }}
     -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
     --connect-timeout=10
     -NBe "SELECT Host FROM mysql.user
     WHERE User = '{{ percona_root_username }}'
@@ -195,6 +192,9 @@
       - -u
       - "{{ percona_root_username }}"
       - "-p{{ percona_root_password }}"
+      - --protocol=TCP
+      - -h
+      - "127.0.0.1"
       - --connect-timeout=10
       - -NBe
       - >-
