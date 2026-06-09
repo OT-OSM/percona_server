@@ -1,17 +1,10 @@
 # =============================================================================
 # Orchestrator — Installation + Configuration
 # =============================================================================
-
-# ── Install PyMySQL — required for community.mysql modules ───────────────────
-# MySQL server not installed on orchestrator
-# But PyMySQL needed for DB/user creation tasks below
-- name: Install PyMySQL on orchestrator
-  ansible.builtin.apt:
-    name:
-      - python3-pymysql
-      - python3-pip
-    state:        present
-    update_cache: true
+# NOTE: MySQL server is installed on orchestrator node
+# Orchestrator backend DB runs on localhost (same as prod setup)
+# percona_install_packages: true in playbook-test.yml orchestrator play
+# =============================================================================
 
 # =====================================================
 # INSTALLATION
@@ -87,7 +80,8 @@
 
 # =====================================================
 # CONFIGURATION
-# Creates backend DB/user, deploys config, starts service
+# Backend DB on localhost — MySQL runs on orchestrator node
+# Same as prod setup (192.168.8.12 has MySQL)
 # =====================================================
 - name: Create orchestrator backend database
   community.mysql.mysql_db:
