@@ -106,7 +106,6 @@
   no_log: true
   when:
     - root_auth_plugin.stdout == "auth_socket"
-    - inventory_hostname not in groups[percona_slave_group] | default([])
 
 # ── Step 3: Verify password login works ──────────────────────────────────────
 - name: Check MySQL login with password
