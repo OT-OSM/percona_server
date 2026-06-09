@@ -2,6 +2,17 @@
 # Orchestrator — Installation + Configuration
 # =============================================================================
 
+# ── Install PyMySQL — required for community.mysql modules ───────────────────
+# MySQL server not installed on orchestrator
+# But PyMySQL needed for DB/user creation tasks below
+- name: Install PyMySQL on orchestrator
+  ansible.builtin.apt:
+    name:
+      - python3-pymysql
+      - python3-pip
+    state:        present
+    update_cache: true
+
 # =====================================================
 # INSTALLATION
 # Archive structure: ./usr/local/orchestrator/orchestrator
@@ -83,6 +94,8 @@
     name:           "{{ percona_ha_orchestrator_backend_user.database }}"
     login_user:     "{{ percona_root_username }}"
     login_password: "{{ percona_root_password }}"
+    login_host:     "127.0.0.1"
+    login_port:     "{{ percona_port }}"
     state:          present
 
 - name: Create orchestrator backend DB user
@@ -93,6 +106,8 @@
     priv:           "{{ percona_ha_orchestrator_backend_user.database }}.*:ALL"
     login_user:     "{{ percona_root_username }}"
     login_password: "{{ percona_root_password }}"
+    login_host:     "127.0.0.1"
+    login_port:     "{{ percona_port }}"
     state:          present
   no_log: true
 
