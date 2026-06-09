@@ -54,6 +54,48 @@
     - percona_log | default(true)
     - percona_log_error | default(false)
 
+# ── Fix SSL cert ownership BEFORE MySQL restart ───────────────────────────────
+# Certs placed as root — fix to mysql ownership before MySQL
+# restarts and tries to read SSL certs from mysqld.cnf
+- name: Check if SSL cert directory exists
+  ansible.builtin.stat:
+    path: "{{ percona_tls_dest_dir }}"
+  register: ssl_dir_stat
+
+- name: Fix SSL cert ownership before MySQL restart
+  ansible.builtin.file:
+    path:    "{{ percona_tls_dest_dir }}"
+    owner:   mysql
+    group:   mysql
+    recurse: true
+  when:
+    - ssl_dir_stat.stat.exists
+    - percona_tls_enabled | default(false)
+
+- name: Fix SSL directory permissions
+  ansible.builtin.file:
+    path:  "{{ percona_tls_dest_dir }}"
+    mode:  "0755"
+  when:
+    - ssl_dir_stat.stat.exists
+    - percona_tls_enabled | default(false)
+
+- name: Fix SSL certificate permissions
+  ansible.builtin.file:
+    path:  "{{ percona_tls_cert_file }}"
+    mode:  "0644"
+  when:
+    - ssl_dir_stat.stat.exists
+    - percona_tls_enabled | default(false)
+
+- name: Fix SSL private key permissions
+  ansible.builtin.file:
+    path:  "{{ percona_tls_key_file }}"
+    mode:  "0640"
+  when:
+    - ssl_dir_stat.stat.exists
+    - percona_tls_enabled | default(false)
+
 - name: Ensure MySQL is started and enabled
   ansible.builtin.service:
     name:    "{{ percona_daemon }}"
@@ -93,6 +135,8 @@
     msg: "Root auth plugin: {{ root_auth_plugin.stdout }}"
 
 # ── Step 2: Set root password via socket if auth_socket ──────────────────────
+# Runs on ALL nodes including slave
+# Fresh install uses auth_socket — set password so TCP auth works
 - name: Set root password via socket — fresh install only
   ansible.builtin.command: >
     mysql
@@ -103,7 +147,7 @@
           BY '{{ percona_root_password }}';
           FLUSH PRIVILEGES;"
   changed_when: true
-  no_log: true
+  no_log: false
   when:
     - root_auth_plugin.stdout == "auth_socket"
 
@@ -125,13 +169,13 @@
 # ── Step 4: Secure installation tasks ────────────────────────────────────────
 - name: Disallow root login remotely
   community.mysql.mysql_user:
-    name:               "{{ percona_root_username }}"
-    host:               "%"
-    state:              absent
-    login_user:         "{{ percona_root_username }}"
-    login_password:     "{{ percona_root_password }}"
-    login_host:         "127.0.0.1"
-    login_port:         "{{ percona_port }}"
+    name:           "{{ percona_root_username }}"
+    host:           "%"
+    state:          absent
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    login_host:     "127.0.0.1"
+    login_port:     "{{ percona_port }}"
   when:
     - mysql_login_check.rc == 0
     - inventory_hostname in groups[percona_master_group] | default([])
