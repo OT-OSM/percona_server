@@ -134,7 +134,24 @@
   ansible.builtin.debug:
     msg: "Root auth plugin: {{ root_auth_plugin.stdout }}"
 
-# ── Step 2: Set root password via socket if auth_socket ──────────────────────
+# ── Step 2: Disable super_read_only on slave before password set ──────────────
+# Slave has super_read_only=ON from mysqld.cnf
+# Must disable before ALTER USER otherwise ERROR 1290
+- name: Disable super_read_only on slave before password set
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    --connect-timeout=10
+    -NBe "SET GLOBAL super_read_only=OFF;
+          SET GLOBAL read_only=OFF;"
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - root_auth_plugin.stdout == "auth_socket"
+    - inventory_hostname in groups[percona_slave_group] | default([])
+
+# ── Step 3: Set root password via socket if auth_socket ──────────────────────
 # Runs on ALL nodes including slave
 # Fresh install uses auth_socket — set password so TCP auth works
 - name: Set root password via socket — fresh install only
@@ -151,7 +168,26 @@
   when:
     - root_auth_plugin.stdout == "auth_socket"
 
-# ── Step 3: Verify password login works ──────────────────────────────────────
+# ── Step 4: Re-enable super_read_only on slave after password set ─────────────
+# Restore slave read-only state after setting root password
+- name: Re-enable super_read_only on slave after password set
+  ansible.builtin.command: >
+    mysql
+    -u {{ percona_root_username }}
+    -p{{ percona_root_password }}
+    --protocol=TCP
+    -h 127.0.0.1
+    --connect-timeout=10
+    -NBe "SET GLOBAL read_only=ON;
+          SET GLOBAL super_read_only=ON;"
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - root_auth_plugin.stdout == "auth_socket"
+    - inventory_hostname in groups[percona_slave_group] | default([])
+
+# ── Step 5: Verify password login works ──────────────────────────────────────
 - name: Check MySQL login with password
   ansible.builtin.command: >
     mysql
@@ -166,7 +202,7 @@
   failed_when: false
   no_log: true
 
-# ── Step 4: Secure installation tasks ────────────────────────────────────────
+# ── Step 6: Secure installation tasks ────────────────────────────────────────
 - name: Disallow root login remotely
   community.mysql.mysql_user:
     name:           "{{ percona_root_username }}"
