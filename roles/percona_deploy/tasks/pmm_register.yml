@@ -1,0 +1,33 @@
+---
+# =========================
+# PMM REGISTER
+# =========================
+
+- name: Setup PMM agent
+  command: >
+    pmm-agent setup
+    --server-address={{ percona_ha_pmm_server_url | regex_replace('https://','') }}
+    --server-insecure-tls
+    --server-username={{ percona_ha_pmm_username }}
+    --server-password={{ percona_ha_pmm_password }}
+  register: pmm_setup
+  changed_when: false
+  no_log: true
+
+- name: Start PMM agent
+  service:
+    name: pmm-agent
+    state: started
+    enabled: true
+
+- name: Register MySQL
+  command: >
+    pmm-admin add mysql
+    --username={{ percona_root_username }}
+    --password={{ percona_root_password }}
+    --host=127.0.0.1
+    --port={{ percona_port }}
+    --query-source=perfschema
+    {{ inventory_hostname }}-mysql
+  register: mysql_reg
+  failed_when: false

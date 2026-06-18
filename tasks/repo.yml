@@ -1,0 +1,14 @@
+---
+- name: Install Percona repository package
+  apt:
+    deb: https://repo.percona.com/apt/percona-release_latest.generic_all.deb
+    state: present
+
+- name: Enable Percona PS 8.0 repo
+  command: percona-release setup ps80
+  args:
+    creates: /etc/apt/sources.list.d/percona-release.list
+
+- name: Update apt cache
+  apt:
+    update_cache: yes

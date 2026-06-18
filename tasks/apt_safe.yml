@@ -1,0 +1,7 @@
+- name: Safe apt update (production hardened)
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    lock_timeout: 180
+  retries: 5
+  delay: 10

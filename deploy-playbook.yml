@@ -1,0 +1,7 @@
+---
+- name: Clean Percona Deploy
+  hosts: percona
+  become: true
+
+  roles:
+    - percona_deploy

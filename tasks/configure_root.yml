@@ -1,0 +1,26 @@
+---
+- name: Detect super_read_only state
+  command: mysql -uroot -p{{ percona_root_password }} -NBe "SELECT @@super_read_only;"
+  register: percona_super_readonly
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: percona_install_packages | default(true) | bool
+
+- name: Set fact for readonly state
+  ansible.builtin.set_fact:
+    mysql_super_readonly: "{{ percona_super_readonly.stdout | default('0') == '1' }}"
+  when: percona_install_packages | default(true) | bool
+
+- name: Ensure root password is set (ONLY PRIMARY / NON-READONLY)
+  command: |
+    mysql -uroot -p{{ percona_root_password }} --connect-timeout=10 -NBe "
+    ALTER USER 'root'@'localhost'
+    IDENTIFIED WITH caching_sha2_password
+    BY '{{ percona_root_password }}';
+    "
+  changed_when: true
+  no_log: true
+  when:
+    - percona_install_packages | default(true) | bool
+    - not (mysql_super_readonly | default(false))

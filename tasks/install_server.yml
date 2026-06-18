@@ -1,0 +1,12 @@
+---
+- name: Ensure Percona repo is configured
+  include_tasks: repo.yml
+
+- name: Install Percona Server packages
+  apt:
+    name:
+      - percona-server-server
+      - percona-server-client
+    state: present
+  when: percona_install_packages | default(true) | bool
+  ignore_errors: "{{ percona_install_packages_ignore_errors | default(false) | bool }}"

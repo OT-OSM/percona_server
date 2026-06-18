@@ -1,0 +1,5 @@
+---
+percona_pmm_enabled: false
+percona_ha_pmm_server_url: "https://pmm.local"
+percona_ha_pmm_username: "admin"
+percona_ha_pmm_password: "admin"

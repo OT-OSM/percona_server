@@ -1,0 +1,29 @@
+---
+- name: Detect super_read_only before user creation
+  command: mysql -uroot -pchangeme -NBe "SELECT @@super_read_only;"
+  register: master_readonly_check
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: inventory_hostname in groups['percona_master_group']
+
+- name: Temporarily disable super_read_only on master
+  command: mysql -uroot -pchangeme -NBe "SET GLOBAL super_read_only=0; SET GLOBAL read_only=0;"
+  changed_when: true
+  no_log: true
+  when:
+    - inventory_hostname in groups['percona_master_group']
+    - master_readonly_check.stdout | default('0') == '1'
+
+- name: Ensure MySQL users only on primary
+  community.mysql.mysql_user:
+    name:           "{{ item.name }}"
+    password:       "{{ item.password }}"
+    host:           "{{ item.host }}"
+    priv:           "{{ item.priv }}"
+    login_user:     "{{ percona_root_username }}"
+    login_password: "{{ percona_root_password }}"
+    state: present
+  loop:
+    - { name: app, password: changeme, priv: "*.*:ALL", host: "%" }
+  when: inventory_hostname in groups['percona_master_group']

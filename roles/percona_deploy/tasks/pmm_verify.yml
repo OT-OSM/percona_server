@@ -1,0 +1,27 @@
+---
+# =========================
+# PMM VERIFY
+# =========================
+
+- name: Check PMM status
+  command: pmm-admin status
+  register: pmm_status
+  changed_when: false
+
+- name: Fail if not connected
+  fail:
+    msg: "PMM not connected"
+  when: "'Connected' not in pmm_status.stdout"
+
+- name: Show status
+  debug:
+    var: pmm_status.stdout_lines
+
+- name: List services
+  command: pmm-admin inventory list services
+  register: services
+  changed_when: false
+
+- name: Show services
+  debug:
+    var: services.stdout_lines

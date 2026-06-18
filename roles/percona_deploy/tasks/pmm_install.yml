@@ -1,0 +1,27 @@
+---
+# =========================
+# PMM INSTALL
+# =========================
+
+- name: Check PMM agent
+  ansible.builtin.stat:
+    path: /usr/bin/pmm-agent
+  register: pmm_agent
+
+- name: Install Percona repo
+  ansible.builtin.apt:
+    deb: https://repo.percona.com/apt/percona-release_latest.generic_all.deb
+    state: present
+  when: not pmm_agent.stat.exists
+
+- name: Enable PMM repo
+  command: percona-release enable pmm-client
+  changed_when: true
+  when: not pmm_agent.stat.exists
+
+- name: Install PMM client
+  ansible.builtin.apt:
+    name: "pmm2-client={{ percona_ha_pmm_client_version }}"
+    state: present
+    update_cache: true
+  when: not pmm_agent.stat.exists

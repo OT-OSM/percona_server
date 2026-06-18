@@ -1,0 +1,16 @@
+---
+# =========================
+# CLEAN PERCONA DEPLOY ROLE
+# =========================
+
+- name: Install PMM
+  include_tasks: pmm_install.yml
+  when: percona_pmm_enabled | default(false)
+
+- name: Register PMM
+  include_tasks: pmm_register.yml
+  when: percona_pmm_enabled | default(false)
+
+- name: Verify PMM
+  include_tasks: pmm_verify.yml
+  when: percona_pmm_enabled | default(false)
