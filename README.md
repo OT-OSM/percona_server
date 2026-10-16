@@ -55,6 +55,7 @@ Each role has **`preflight.yml` → component tasks → `validation.yml`**. Expo
 ## Find your way
 
 - [Run the lab one task at a time](docs/lab-tasks.md)
+- [Verify a standalone installation: commands and expected results](docs/standalone-verification.md)
 - [What each component means](docs/concepts.md)
 - [Architecture and ownership](docs/architecture.md)
 - [Configuration reference](docs/configuration-reference.md)
