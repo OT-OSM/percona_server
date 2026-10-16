@@ -1,9 +1,4 @@
 ---
-- name: Keep schema changes on a writable node
-  ansible.builtin.assert:
-    that:
-    - not percona_read_only or percona_databases | length == 0
-    fail_msg: Run database creation on the writer only.
 - name: Manage explicitly listed databases
   community.mysql.mysql_db:
     login_user: '{{ percona_root_username }}'

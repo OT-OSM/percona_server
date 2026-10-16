@@ -1,32 +1,52 @@
-# Component map and ownership
+# Architecture
 
 ```mermaid
-flowchart TB
-  I[One environment inventory] --> S[Server playbooks]
-  I --> A[Optional component playbooks]
-  S --> C[percona_server owns MySQL config]
-  A --> R[Replication channels]
-  A --> B[Backup account / files / cron]
-  A --> M[Exporter account / service]
-  A --> P[Proxy users / routing]
-  A --> O[Topology observation]
-  C --> DB[Existing Percona 8.0 data]
-  R --> DB
-  B --> DB
-  M --> DB
-  P --> DB
-  O -.-> DB
+flowchart LR
+  I[Inventory] --> S[percona_server]
+  S --> GR[percona_group_replication]
+  GR --> P[proxysql]
+  P --> VIP[proxysql_ha: optional VIP]
+  GR --> B[percona_backup]
+  GR --> E[mysql_exporter]
 ```
 
-| Boundary | Rule |
+| Layer | Owner |
 |---|---|
-| MySQL configuration | percona_server owns the normal configuration. Explicit restore adds a temporary read-only/startup guard; healthy replica attachment removes that guard. No inventory-group-derived role changes. |
-| Accounts | Add-ons create their own accounts through `percona_account_host`, normally the current writer. They replicate to replicas; read-only protection is not disabled to provision them. |
-| Privileged login | `percona_root_password` is the local login. `percona_admin_password` is the writer's credential used by delegated account tasks; inventory maps both to Vault. |
-| Addresses | `percona_address` is the database address; `ansible_host` is SSH. No dependency on another host's gathered network facts. |
-| Restore | Explicit play, one target, preserved original datadir; prepare/checksums finish before stopping MySQL. |
-| Promotion | Update inventory only after reconciling actual state. Server validation rejects unreviewed identity/topology changes. |
-| Scheduling | Explicit desired cron state; disabling removes managed jobs. |
-| Optional services | Skipping a play does not uninstall an existing service. |
+| Packages, identity, mysqld.cnf | percona_server |
+| Group membership and recovery channel | percona_group_replication |
+| Primary election | MySQL Group Replication itself |
+| Application routing | ProxySQL native group monitor |
+| Proxy endpoint failover | Keepalived, or your existing load balancer |
+| Scheduled backup / restore | percona_backup |
+| Metrics | mysql_exporter → existing monitoring platform |
 
-Ports: MySQL 3306; ProxySQL frontend 6033/admin localhost 6032; exporter 9104; Orchestrator localhost 3000; MinIO uses your external HTTPS endpoint. Firewall and certificates are environment responsibilities. Deploy TLS material before setting server/replication TLS options.
+## Placement
+
+| Profile | VMs |
+|---|---|
+| Standalone | One database VM |
+| HA example | Three database VMs + two proxy VMs |
+| Three-VM lab | Proxies may share two database VMs; use the same inventory host names in both groups |
+
+Place databases on different physical hosts. A three-member group can retain quorum after one member fails. Losing quorum stops writes; setup never force-bootstraps an old group.
+
+The example has a local backup source on db3. Configure existing MinIO for off-host copies. A local HA group is not a remote DR site.
+
+## Network
+
+| Traffic | Port |
+|---|---|
+| App → proxies | TCP 6033 |
+| Proxy → databases; member recovery | TCP 3306 |
+| Group communication between databases | TCP 33061 |
+| Prometheus → exporters | TCP 9104 |
+| Proxy administration | TCP 6032, localhost |
+| VIP election between proxies | IP protocol 112 (VRRP), not TCP/UDP |
+
+## References
+
+- [Percona Group Replication architecture](https://docs.percona.com/percona-distribution-for-mysql/8.4/deploy-pdps-group-replication.html)
+- [ProxySQL native Group Replication monitor](https://proxysql.com/documentation/group-replication-configuration/)
+- [8.4 removed options](https://dev.mysql.com/doc/refman/8.4/en/added-deprecated-removed.html)
+
+The older guide's removed variables and legacy sys view are not copied into this setup.

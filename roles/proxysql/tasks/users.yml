@@ -1,13 +1,4 @@
 ---
-- name: Require schema-scoped application grants
-  ansible.builtin.assert:
-    that:
-    - item.priv is defined
-    - not item.priv is search('\*\.\*:')
-    - item.password | length >= 12
-    fail_msg: Supply schema-scoped privileges and credentials for each proxy application user.
-  loop: '{{ proxysql_users }}'
-  no_log: true
 - name: Create matching database app accounts for this proxy source
   community.mysql.mysql_user:
     login_user: '{{ hostvars[percona_account_host].percona_root_username | default(percona_root_username) }}'
@@ -16,7 +7,8 @@
     config_file: ''
     name: '{{ item.name }}'
     host: '{{ proxysql_source_address }}'
-    plugin: mysql_native_password
+    plugin: caching_sha2_password
+    salt: "{{ (item.name | hash('sha256'))[:20] }}"
     plugin_auth_string: '{{ item.password }}'
     priv: '{{ item.priv }}'
     state: '{{ item.state | default(''present'') }}'

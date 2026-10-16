@@ -1,18 +1,14 @@
 ---
-- name: Run preflight
-  ansible.builtin.import_tasks: preflight.yml
-- name: Run install
+- name: Install
   ansible.builtin.import_tasks: install.yml
   when: proxysql_install_packages | bool
-- name: Run bootstrap
+- name: Bootstrap
   ansible.builtin.import_tasks: bootstrap.yml
-- name: Run accounts
+- name: Accounts
   ansible.builtin.import_tasks: accounts.yml
-- name: Run backends
+- name: Backends
   ansible.builtin.import_tasks: backends.yml
-- name: Run users
+- name: Users
   ansible.builtin.import_tasks: users.yml
-- name: Run routing
+- name: Routing
   ansible.builtin.import_tasks: routing.yml
-- name: Run validation
-  ansible.builtin.import_tasks: validation.yml

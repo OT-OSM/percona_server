@@ -1,77 +1,89 @@
-# Percona 8.0 — start small, add components
+# Percona 8.4 LTS — standalone or Group Replication
+
+Basic Ansible setup for **Ubuntu 24.04 amd64**. One server now, or three database nodes with a single writer and two ProxySQL endpoints.
 
 ```mermaid
-flowchart LR
-  A[Application] --> D[Percona 8.0]
-  P[Optional ProxySQL] --> D
-  D --> R[Optional replica]
-  D --> B[Optional backups]
-  M[Optional exporter] --> D
-  O[Optional Orchestrator observer] -.-> D
-  O -.-> R
+flowchart TB
+  A[Application] --> V[Optional VIP]
+  V --> P1[ProxySQL 1]
+  V --> P2[ProxySQL 2]
+  P1 --> G
+  P2 --> G
+  subgraph G[Percona 8.4 Group Replication]
+    D1[Writer] --- D2[Secondary]
+    D1 --- D3[Secondary]
+  end
+  G --> B[XtraBackup: local / MinIO]
+  G --> E[MySQL exporters]
+  E --> M[Existing Prometheus / Grafana]
 ```
 
-## Start with one database
+## Start here
 
-Run the commands below from the repository root.
-
-Controller: Ansible Core 2.16+ and the pinned collections below. Targets: Ubuntu 22.04/24.04 with systemd, SSH/sudo and access to an authorized **Percona 8.0** package repository. The candidate and running version are checked; **no 8.4 upgrade is performed**. Binary add-ons currently target amd64. Live OS/package acceptance remains required.
+Run from the repository root. The controller needs Ansible Core 2.16+; target VMs need SSH, sudo and package download access.
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
-ansible-vault create inventories/lab/group_vars/all/vault.yml
 ```
 
-In the Vault editor, copy the example keys and give `vault_percona_root_password` a unique password of at least 12 characters. Fill other keys only when adding that component. Edit `inventories/lab/hosts.yml` with your SSH address; edit `host_vars/db1.yml` if the database address differs. Permit database access only from intended private clients; this project does not manage firewalls.
+1. Edit IPs in [standalone inventory](inventories/lab/hosts.yml) **or** [HA inventory](inventories/lab/ha.yml). Use only one inventory file per command.
+2. Fill the keys in [vault.example.yml](inventories/lab/group_vars/all/vault.example.yml). Create `vault.yml` with `ansible-vault create inventories/lab/group_vars/all/vault.yml`; use `ansible-vault edit` if it already exists.
+3. For HA, give this cluster its own UUID in [shared settings](inventories/lab/group_vars/all/main.yml): `python3 -c 'import uuid; print(uuid.uuid4())'`.
+4. Choose a deployment:
 
 ```bash
-ansible-playbook playbooks/standalone.yml --ask-vault-pass --syntax-check
+# One server + scheduled backups + exporter
 ansible-playbook playbooks/standalone.yml --ask-vault-pass
+
+# Three database servers + two proxies + backups + exporters
+ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
 ```
 
-On db1: `mysql -u root -p -e 'SELECT VERSION(), @@server_id, @@gtid_mode;'`.
+HA initially exposes each proxy on **6033**. To add one stable VIP, edit [proxy settings](inventories/lab/group_vars/proxies.yml): enable `proxysql_ha_enabled`, set the interface and an unused VIP, then rerun `playbooks/proxysql.yml` with the HA inventory. The network must support the VIP/VRRP arrangement.
 
-**Fresh install:** tries the desired root credential, then supported local initial authentication. **Existing database:** stops unless you explicitly review and opt into [adoption](docs/migration.md). No grant bypass, datadir deletion or automatic major upgrade.
+## Six roles
 
-## Add only what you need
+| Role | Job |
+|---|---|
+| [percona_server](roles/percona_server/README.md) | Install 8.4, configure MySQL, create databases/users |
+| [percona_group_replication](roles/percona_group_replication/README.md) | Bootstrap once, join fresh nodes, single-primary election |
+| [proxysql](roles/proxysql/README.md) | Route application traffic to the current writer |
+| [proxysql_ha](roles/proxysql_ha/README.md) | Optional Keepalived VIP for the two proxies |
+| [percona_backup](roles/percona_backup/README.md) | Full/incremental backups and explicit isolated restore |
+| [mysql_exporter](roles/mysql_exporter/README.md) | MySQL and Group Replication metrics |
 
-Use the **same inventory** as you grow. Optional groups start empty or name existing database nodes; standalone invokes only `percona_server`.
+## Change configuration
 
-| Need | Playbook | Component guide |
-|---|---|---|
-| Standalone database | `playbooks/standalone.yml` | [Server](roles/percona_server/README.md) |
-| Replica | prepare → seed → attach | [Replication](docs/standalone-to-replication.md) |
-| Full/incremental backup | `playbooks/backup.yml` | [Backups](roles/percona_backup/README.md) |
-| Database metrics | `playbooks/monitoring.yml` | [Exporter](roles/mysql_exporter/README.md) |
-| Application proxy | `playbooks/proxysql.yml` | [ProxySQL](roles/proxysql/README.md) |
-| Topology observation | `playbooks/orchestrator.yml` | [Orchestrator](roles/orchestrator/README.md) |
-| Explicit recovery enablement | `playbooks/recovery_enable.yml` | [Recovery requirements](docs/orchestrator-and-failover.md) |
-| Isolated restore | `playbooks/restore.yml` | [Restore](docs/backup-and-restore.md) |
+Edit `percona_max_connections`, buffer pool or other supported settings in inventory:
 
-Example: `ansible-playbook playbooks/monitoring.yml --ask-vault-pass`.
-
-Each role has **`preflight.yml` → component tasks → `validation.yml`**. Exporter account creation is on the designated writer; the service runs on each selected database node. Add-ons preserve the server role's configuration; explicit restore adds a temporary isolation guard. No restore runs during normal backup configuration.
-
-## Find your way
-
-- [Run the lab one task at a time](docs/lab-tasks.md)
-- [Verify a standalone installation: commands and expected results](docs/standalone-verification.md)
-- [What each component means](docs/concepts.md)
-- [Architecture and ownership](docs/architecture.md)
-- [Configuration reference](docs/configuration-reference.md)
-- [Old-to-new migration](docs/migration.md)
-- [Validation and live acceptance](docs/validation.md)
-- [EOD report: changes, fixes and limitations](docs/EOD_REPORT.md)
-- [Liquibase boundary](docs/liquibase.md)
-- [Historical snapshot](archive/README.md)
-
-The old layout is archived for reference. PMM and the unsafe automatic rejoin script are not part of active playbooks. This implementation needs live deployment/restore/failover acceptance before being described as production-validated.
-
-```text
-playbooks/            # Choose the action: standalone, backup, replication, ...
-inventories/lab/      # Hosts, component settings and your encrypted Vault file
-roles/               # Six independent implementations, each with its own README
-docs/                # Learning path, operations, migration and EOD report
-tests/               # Local checks; no infrastructure changes
-archive/legacy/      # Original implementation retained for reference
+```bash
+ansible-playbook -i inventories/lab/ha.yml playbooks/configure.yml --ask-vault-pass
 ```
+
+This first version **restarts MySQL when its configuration changes**, one node at a time, waiting for an established group member to rejoin. Standalone restarts interrupt service; HA connections can also reconnect. Unchanged configuration does not restart MySQL.
+
+## See it running
+
+```sql
+-- Run on any database VM: mysql -u root -p
+SELECT MEMBER_HOST, MEMBER_STATE, MEMBER_ROLE
+FROM performance_schema.replication_group_members;
+```
+
+Expected HA view: three `ONLINE` members, one `PRIMARY`, two `SECONDARY`.
+
+```bash
+mysql -h <proxy-ip-or-vip> -P 6033 -u appuser -p appdb
+curl http://<database-ip>:9104/metrics
+sudo /usr/local/bin/percona-backup backup full
+```
+
+## Scope of this first setup
+
+Default datadir `/var/lib/mysql`; binlogs stay there. Fresh members join using retained binary logs; no automatic cloning or data replacement. Existing 8.0 servers are not upgraded by these playbooks.
+
+Included: basic group setup, writer routing, optional proxy VIP, physical backups, exporters. Deferred: hardening, custom storage, live tuning without restarts, rolling upgrades, whole-cluster disaster recovery, binlog archiving/PITR, retention deletion and cross-site DR. Prometheus/Grafana are external; monitoring examples are supplied in the guide.
+
+There are no separate preflight/validation roles or files. Essential setup checks remain around version replacement, bootstrap and restores. This branch has local checks; it is **not yet live-deployment or production validated**.
+
+[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md)

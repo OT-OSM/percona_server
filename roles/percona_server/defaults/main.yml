@@ -3,14 +3,12 @@ percona_root_username: root
 percona_root_password: ''
 percona_socket: /var/run/mysqld/mysqld.sock
 percona_port: 3306
-percona_version: '8.0'
+percona_version: '8.4'
 percona_install_packages: true
 percona_manage_repository: true
 percona_release_package: https://repo.percona.com/apt/percona-release_latest.generic_all.deb
 percona_server_package_version: ''
 percona_bootstrap_password: ''
-percona_adopt_existing: false
-percona_allow_gtid_enable: false
 percona_server_id: 1
 percona_bind_address: 127.0.0.1
 percona_config_file: /etc/mysql/mysql.conf.d/mysqld.cnf
@@ -22,7 +20,7 @@ percona_binlog_expire_logs_seconds: 604800
 # Missing facts use a 1024 MiB sizing input (512M pool at the default percentage).
 percona_memory_mb: '{{ ansible_facts.memtotal_mb | default(1024) }}'
 percona_buffer_pool_percent: 50
-# Match default Linux 8.0 chunk/instance alignment without rounding above the budget.
+# Match default Linux 8.4 chunk/instance alignment without rounding above the budget.
 # Below 1 GiB use 128 MiB steps; otherwise use 1 GiB steps. Explicit values override.
 percona_innodb_buffer_pool_size: >-
   {%- set target_mb = percona_memory_mb | int * percona_buffer_pool_percent | int / 100 -%}
@@ -66,3 +64,12 @@ percona_tls_ca: ''
 percona_tls_cert: ''
 percona_tls_key: ''
 percona_require_secure_transport: false
+
+# Group membership comes from the selected inventory.
+percona_topology: "{{ 'group_replication' if groups.get('gr_members', []) | length else 'standalone' }}"
+percona_group_name: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+percona_group_port: 33061
+percona_group_seed: "{{ groups.get('gr_members', ['db1']) | first }}"
+percona_group_user: gr_recovery
+percona_group_password: ''
+percona_address: '{{ ansible_host | default(inventory_hostname) }}'

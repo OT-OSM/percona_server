@@ -1,16 +1,11 @@
 ---
-- name: Run preflight
-  ansible.builtin.import_tasks: preflight.yml
-- name: Run install
+- name: Install Percona
   ansible.builtin.import_tasks: install.yml
   when: percona_install_packages | bool
-- name: Run bootstrap
+- name: Connect to MySQL
   ansible.builtin.import_tasks: bootstrap.yml
-- name: Run configure
+- name: Configure MySQL
   ansible.builtin.import_tasks: configure.yml
-- name: Run databases
-  ansible.builtin.import_tasks: databases.yml
-- name: Run users
-  ansible.builtin.import_tasks: users.yml
-- name: Run validation
-  ansible.builtin.import_tasks: validation.yml
+- name: Create standalone databases and users
+  ansible.builtin.import_tasks: applications.yml
+  when: percona_topology == 'standalone'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local staged XtraBackup 8.0 chains, optional verified-TLS MinIO publication.
+"""Local staged XtraBackup 8.4 chains, optional verified-TLS MinIO publication.
 No automatic deletion, password arguments, shell interpolation, or in-place prepare.
 """
 import argparse
@@ -85,8 +85,8 @@ def take_backup(config, kind):
     state_path = root / 'state.json'
     source = run([config.get('mysql', 'mysql'), '--defaults-file=' + config['client_file'],
                   '--batch', '--skip-column-names', '-e', 'SELECT @@server_uuid, @@version']).stdout.strip().split('\t')
-    if len(source) != 2 or not source[1].startswith('8.0.'):
-        raise ValueError('Backup source must be MySQL-compatible 8.0')
+    if len(source) != 2 or not source[1].startswith('8.4.'):
+        raise ValueError('Backup source must be MySQL-compatible 8.4')
     source_uuid, version = source
     previous = None
     if kind == 'incremental':

@@ -3,7 +3,6 @@ percona_root_username: root
 percona_root_password: ''
 percona_socket: /var/run/mysqld/mysqld.sock
 percona_port: 3306
-percona_account_host: '{{ inventory_hostname }}'
 backup_db_user: backup
 backup_db_password: ''
 backup_storage: local

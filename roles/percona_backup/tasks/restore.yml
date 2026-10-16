@@ -21,9 +21,9 @@
 - name: Refuse a different server generation or datadir
   ansible.builtin.assert:
     that:
-    - restore_target_identity.query_result[0][0].version is match('^8\.0\.')
+    - restore_target_identity.query_result[0][0].version is match('^8\.4\.')
     - restore_target_identity.query_result[0][0].datadir.rstrip('/') == '/var/lib/mysql'
-    fail_msg: Restore requires an isolated 8.0 target using /var/lib/mysql; no major-version migration or datadir
+    fail_msg: Restore requires an isolated 8.4 target using /var/lib/mysql; no major-version migration or datadir
       relocation is attempted.
 - name: Check target is not already replicating
   community.mysql.mysql_replication:
@@ -71,6 +71,8 @@
   ansible.builtin.copy:
     dest: /etc/mysql/mysql.conf.d/zz-percona-restore.cnf
     content: '[mysqld]
+
+      loose-group-replication-start-on-boot = OFF
 
       skip-replica-start = ON
 

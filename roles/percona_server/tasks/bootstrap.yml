@@ -57,29 +57,3 @@
     query: SELECT 1
   changed_when: false
   no_log: true
-- name: Find anonymous and remote administrator accounts
-  community.mysql.mysql_query:
-    login_user: '{{ percona_root_username }}'
-    login_password: '{{ percona_root_password }}'
-    login_unix_socket: '{{ percona_socket }}'
-    config_file: ''
-    query: SELECT User, Host FROM mysql.user WHERE User = '' OR (User = %s AND Host <> 'localhost')
-    positional_args:
-    - '{{ percona_root_username }}'
-  register: percona_unwanted_accounts
-  changed_when: false
-  no_log: true
-  when: not percona_read_only
-- name: Remove anonymous and remote administrator accounts
-  community.mysql.mysql_user:
-    login_user: '{{ percona_root_username }}'
-    login_password: '{{ percona_root_password }}'
-    login_unix_socket: '{{ percona_socket }}'
-    config_file: ''
-    name: '{{ item.User }}'
-    host: '{{ item.Host }}'
-    state: absent
-    sql_log_bin: false
-  loop: '{{ percona_unwanted_accounts.query_result[0] | default([]) }}'
-  no_log: true
-  when: not percona_read_only

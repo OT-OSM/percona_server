@@ -1,0 +1,27 @@
+---
+- name: Prepare Percona 8.4 database nodes
+  hosts: gr_members
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+  - percona_server
+- name: Form the single-primary group
+  hosts: gr_members
+  become: true
+  any_errors_fatal: true
+  roles:
+  - percona_group_replication
+- name: Create application databases and users on the elected writer
+  hosts: gr_members
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Manage applications once
+    ansible.builtin.include_role:
+      name: percona_server
+      tasks_from: applications
+    run_once: true
+- import_playbook: proxysql.yml
+- import_playbook: backup.yml
+- import_playbook: monitoring.yml

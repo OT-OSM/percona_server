@@ -1,6 +1,0 @@
----
-- name: orchestrator_restart
-  ansible.builtin.systemd:
-    name: orchestrator
-    state: restarted
-    daemon_reload: true

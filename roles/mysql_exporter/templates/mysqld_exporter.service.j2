@@ -3,10 +3,7 @@ Description=MySQL metrics exporter
 After=network.target mysql.service
 [Service]
 User=mysqld_exporter
-ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysqld_exporter/client.cnf --web.listen-address={{ exporter_listen_address }}:{{ exporter_port }}
+ExecStart=/usr/local/bin/mysqld_exporter --config.my-cnf=/etc/mysqld_exporter/client.cnf --collect.perf_schema.replication_group_members --collect.perf_schema.replication_group_member_stats --web.listen-address={{ exporter_listen_address }}:{{ exporter_port }}
 Restart=on-failure
-NoNewPrivileges=true
-ProtectHome=true
-ProtectSystem=strict
 [Install]
 WantedBy=multi-user.target

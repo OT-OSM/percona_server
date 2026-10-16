@@ -1,5 +1,0 @@
----
-orchestrator_checksum: ''
-orchestrator_source_address: '{{ ansible_host }}'
-orchestrator_listen_address: 127.0.0.1
-orchestrator_recovery_enabled: false

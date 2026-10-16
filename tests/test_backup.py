@@ -21,7 +21,7 @@ args=sys.argv[1:]
 with open(os.environ['FAKE_CALLS'], 'a') as f: f.write(json.dumps([Path(sys.argv[0]).name] + args)+'\\n')
 name=Path(sys.argv[0]).name
 if name == 'mysql':
- print(os.environ.get('FAKE_UUID','source-uuid')+'\\t8.0.40-31')
+ print(os.environ.get('FAKE_UUID','source-uuid')+'\\t8.4.8-8')
 elif name == 'mc':
  if os.environ.get('FAKE_UPLOAD_FAIL') == '1':sys.exit(4)
 elif '--backup' in args:

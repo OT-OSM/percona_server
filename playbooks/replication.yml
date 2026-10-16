@@ -1,9 +1,0 @@
----
-- name: Attach seeded replicas to the explicit current primary
-  hosts: database
-  become: true
-  gather_facts: true
-  any_errors_fatal: true
-  roles:
-  - percona_replication
-  strategy: linear

@@ -1,9 +1,0 @@
----
-- name: Run preflight
-  ansible.builtin.import_tasks: preflight.yml
-- name: Run account
-  ansible.builtin.import_tasks: account.yml
-- name: Run configure
-  ansible.builtin.import_tasks: configure.yml
-- name: Run validation
-  ansible.builtin.import_tasks: validation.yml

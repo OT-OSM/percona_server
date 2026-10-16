@@ -1,41 +1,48 @@
-# Run the lab one task at a time
-
-Use disposable Ubuntu VMs and the same `inventories/lab` throughout. Start with **db1 only**. Run controller commands from the repository root; replace example addresses and fill the required Vault credentials. Follow the [quickstart](../README.md) first.
+# Lab walkthrough
 
 ```mermaid
 flowchart LR
-  S[1. Standalone] --> I[2. Rerun]
-  I --> B[3. Backup]
-  B --> R[4. Seed and attach replica]
-  R --> M[5. Metrics]
-  M --> P[6. Proxy]
-  P --> O[7. Observe topology]
-  O --> F[8. Optional recovery drills]
+  A[Edit hosts and credentials] --> B[Install]
+  B --> C[See group members]
+  C --> D[Connect through proxy]
+  D --> E[View metrics and take backup]
 ```
 
-This is a learning order. Backup, metrics and the proxy can also be added directly to a standalone server.
+1. Prepare fresh Ubuntu 24.04 amd64 VMs and edit [HA inventory](../inventories/lab/ha.yml).
+2. Fill the existing Vault keys from [the example](../inventories/lab/group_vars/all/vault.example.yml).
+3. Run the setup:
 
-| Task | Run / change | Evidence before moving on |
-|---|---|---|
-| 1. Standalone | `ansible-playbook playbooks/standalone.yml --ask-vault-pass` | On db1: `mysql -u root -p -e 'SELECT VERSION(), @@server_id, @@gtid_mode;'`; version is 8.0, ID is 101, GTID is ON |
-| 2. Rerun | Run the same command again without changing variables | No database restart or credential churn; previous data remains |
-| 3. Backup | Fill backup password; run `ansible-playbook playbooks/backup.yml --ask-vault-pass`; on db1 run `sudo /usr/local/bin/percona-backup backup full` | Completed directory has manifest and success marker; scheduling stays off unless explicitly enabled |
-| 4. Replica | Add db2 with ID 102; follow [prepare → seed → attach](standalone-to-replication.md) | Both replication threads run; a new row written on db1 appears on db2; db2 rejects application writes |
-| 5. Metrics | Fill exporter password; select hosts in `monitoring_targets`; run `ansible-playbook playbooks/monitoring.yml --ask-vault-pass` | On each selected host: `curl -fsS http://127.0.0.1:9104/metrics`; find `mysql_up 1` |
-| 6. Proxy | Add proxy host, verified package checksum and credentials; follow [proxy setup](proxysql.md) | Application account connects on port 6033; transactions reach the writer; configuration survives proxy restart |
-| 7. Observer | Add Orchestrator host, verified checksum and credentials; follow [observer setup](orchestrator-and-failover.md) | Authenticated UI shows primary/replica topology; automatic recovery remains disabled |
-| 8. Recovery drills | Only after tested fencing/routing hooks exist, use the separate recovery play | Partition/failure drills demonstrate one writer, correct routing and old-primary isolation |
+```bash
+ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
+```
 
-For task 4, a small disposable probe makes replication visible. On db1, log in as root and run:
+4. On a database VM, open `mysql -u root -p`:
 
 ```sql
-CREATE DATABASE IF NOT EXISTS lab_probe;
-CREATE TABLE IF NOT EXISTS lab_probe.events (id INT PRIMARY KEY, message VARCHAR(80));
-INSERT INTO lab_probe.events VALUES (1, 'standalone grew into replication');
+SELECT VERSION();
+SELECT MEMBER_HOST, MEMBER_STATE, MEMBER_ROLE
+FROM performance_schema.replication_group_members;
 ```
 
-On db2, `SELECT * FROM lab_probe.events;` should return the row after replication catches up. Keep this schema separate from application data. Never simulate failures against a real application to complete this checklist.
+5. Connect through either proxy:
 
-Before calling backup complete, test [an isolated restore](backup-and-restore.md), compare application rows/schema, and retain the source backup. Before enabling schedules, choose storage capacity and a chain-preserving retention procedure.
+```bash
+mysql -h <proxy-ip> -P 6033 -u appuser -p appdb
+```
 
-Record each task's play recap, database version and observed result. The [validation guide](validation.md) separates checks already run locally from these live exercises. Liquibase comes afterward as an [application migration job](liquibase.md), not another infrastructure dependency.
+```sql
+CREATE TABLE demo (id INT PRIMARY KEY, note VARCHAR(100));
+INSERT INTO demo VALUES (1, 'hello from Group Replication');
+SELECT @@hostname;
+SELECT * FROM appdb.demo;
+```
+
+Application tables need primary keys for Group Replication.
+
+6. See exporter metrics: `curl http://<db-ip>:9104/metrics`.
+7. On db3, run `sudo /usr/local/bin/percona-backup backup full`.
+8. Optionally enable the proxy VIP in [proxy settings](../inventories/lab/group_vars/proxies.yml), then run `playbooks/proxysql.yml` with the same inventory.
+
+To start with one VM instead, use `playbooks/standalone.yml` and `inventories/lab/hosts.yml`. Do not run the HA play with `--limit`: bootstrap needs the full group inventory.
+
+Stopping the current writer can demonstrate election in a disposable lab, but active connections may fail and need reconnecting. Full outage recovery and failure acceptance are a later phase.

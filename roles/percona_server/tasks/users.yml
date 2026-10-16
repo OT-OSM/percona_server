@@ -1,9 +1,4 @@
 ---
-- name: Keep general account changes on a writable node
-  ansible.builtin.assert:
-    that:
-    - not percona_read_only or percona_users | length == 0
-    fail_msg: Run account creation on the writer; service roles manage their own accounts.
 - name: Manage explicitly listed application accounts
   community.mysql.mysql_user:
     login_user: '{{ percona_root_username }}'

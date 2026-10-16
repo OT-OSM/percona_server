@@ -1,21 +1,21 @@
 # percona_server
 
-Install one database; keep its data and identity stable.
+Install and configure Percona 8.4.
 
 ```mermaid
 flowchart LR
-  A[standalone.yml] --> B[preflight]; B --> C[install / bootstrap]; C --> D[configure]; D --> E[databases / users]; E --> F[validation]
+  A[Packages] --> B[Local login] --> C[mysqld.cnf] --> D[Databases / users]
 ```
 
-| Item | Value |
-|---|---|
-| Hosts | `primary` (or `replicas` through replica_prepare.yml) |
-| Inputs | `percona_root_password`, unique `percona_server_id`, private `percona_bind_address`. |
-| Defaults | [defaults/main.yml](defaults/main.yml) |
-| Entry point | [tasks/main.yml](tasks/main.yml) |
-| Checks before changes | [tasks/preflight.yml](tasks/preflight.yml) |
-| Checks after changes | [tasks/validation.yml](tasks/validation.yml) |
+Owns MySQL configuration. Default data and binlog directory: `/var/lib/mysql`. Group settings are enabled by membership in `gr_members`. Application definitions are applied once after the group forms.
 
-The only owner of `mysqld.cnf`. GTID/binlogs are on from the first installation; the buffer pool defaults to 50% of detected RAM, with explicit overrides. Connections stay at 150 rather than scaling with RAM. See [memory sizing](../../docs/memory-sizing.md). Database creation never adds binlog filters. It refuses stale topology, changed server IDs and unreviewed adoption. Config-only: set `percona_install_packages: false`; configuration and validation still run.
+```yaml
+percona_max_connections: 150
+percona_innodb_buffer_pool_size: 2G
+```
 
-[Project quickstart](../../README.md) · [Standalone verification commands](../../docs/standalone-verification.md) · [Live acceptance](../../docs/validation.md)
+```bash
+ansible-playbook -i inventories/lab/hosts.yml playbooks/standalone.yml --ask-vault-pass
+```
+
+[Defaults](defaults/main.yml) · [Tasks](tasks/main.yml) · [Project setup](../../README.md)

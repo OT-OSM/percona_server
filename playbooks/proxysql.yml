@@ -1,9 +1,9 @@
 ---
-- name: Add an explicit application proxy
+- name: Set up application routing and optional VIP
   hosts: proxies
   become: true
-  gather_facts: true
+  serial: 1
   any_errors_fatal: true
   roles:
   - proxysql
-  serial: 1
+  - proxysql_ha

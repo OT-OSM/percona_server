@@ -1,29 +1,24 @@
 ---
-- name: Restore a verified backup to one isolated target
+- name: Restore a backup to one separate standalone target
   hosts: restore_targets
   become: true
-  gather_facts: true
-  any_errors_fatal: true
   serial: 1
-  vars:
-    backup_restore_as_replica: false
+  any_errors_fatal: true
   pre_tasks:
-  - name: Select only one target for this restore
+  - name: Select one target outside the active database group
     ansible.builtin.assert:
       that:
       - ansible_play_hosts_all | length == 1
-      - backup_restore_target is defined
-      - backup_restore_target == inventory_hostname
-      - inventory_hostname != percona_primary
-      - ansible_host | default(inventory_hostname) != hostvars[percona_primary].ansible_host | default(percona_primary)
-      fail_msg: Use --limit <isolated target> and -e backup_restore_target=<same host>. The current writer is never
-        a restore target.
+      - backup_restore_target | default('') == inventory_hostname
+      - inventory_hostname not in groups.get('database', [])
+      - ansible_host | default(inventory_hostname) not in (groups.get('database', []) | map('extract', hostvars, 'ansible_host') | list)
+      fail_msg: Select a separate restore_targets host using --limit and backup_restore_target.
   tasks:
-  - name: Install restore tooling without creating or validating a source account
+  - name: Install backup tooling
     ansible.builtin.import_role:
       name: percona_backup
       tasks_from: prepare_target
-  - name: Run only the explicit restore entry point
+  - name: Restore the selected backup
     ansible.builtin.import_role:
       name: percona_backup
       tasks_from: restore

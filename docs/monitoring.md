@@ -2,10 +2,41 @@
 
 ```mermaid
 flowchart LR
-  P[Existing Prometheus] -->|9104| E[Exporter]
-  E -->|local socket| D[Percona 8.0]
+  D[Each database] --> E[mysqld_exporter :9104]
+  E --> P[Existing Prometheus]
+  P --> G[Grafana]
+  P --> A[Alertmanager]
 ```
 
-Fill `vault_exporter_password`, select `monitoring_targets`, and run `playbooks/monitoring.yml`. Use `exporter_listen_address` for a private scraper-facing address. Validation requires `mysql_up 1` in `/metrics`; add these endpoints to your existing Prometheus configuration.
+The role installs exporters and enables Group Replication collectors. Prometheus, Grafana and Alertmanager remain outside this repository's deployment.
 
-Watch database availability, replication failures/lag, backup age, disk capacity, connection pressure and query latency. PMM's old inconsistent registration code is archived; it is not silently enabled or presented as repaired.
+```bash
+ansible-playbook -i inventories/lab/ha.yml playbooks/monitoring.yml --ask-vault-pass
+curl http://192.0.2.11:9104/metrics
+```
+
+Add to your existing Prometheus configuration:
+
+```yaml
+scrape_configs:
+- job_name: percona
+  static_configs:
+  - targets: ['192.0.2.11:9104', '192.0.2.12:9104', '192.0.2.13:9104']
+```
+
+Start with the `mysql_up` metric and the `mysql_perf_schema_replication_group_*` series. Add this rule to an existing Prometheus rule file:
+
+```yaml
+groups:
+- name: percona
+  rules:
+  - alert: PerconaUnavailable
+    expr: up{job="percona"} == 0 or mysql_up{job="percona"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: 'Percona or exporter unavailable: {{ $labels.instance }}'
+```
+
+Alert delivery and Grafana dashboards must be connected in your monitoring platform. No dashboard is automatically installed in this basic setup.

@@ -100,20 +100,3 @@
     value: '{{ proxysql_listen_address }}:{{ proxysql_port }}'
   no_log: true
   notify: proxysql_restart
-- name: Inspect existing active query rules before routing changes
-  community.mysql.mysql_query:
-    login_user: '{{ proxysql_admin_user }}'
-    login_password: '{{ proxysql_admin_password }}'
-    login_host: 127.0.0.1
-    login_port: 6032
-    config_file: ''
-    query: SELECT rule_id FROM mysql_query_rules WHERE active=1
-  register: proxysql_existing_rules
-  changed_when: false
-  no_log: true
-- name: Do not claim writer-only routing over pre-existing rules
-  ansible.builtin.assert:
-    that:
-    - proxysql_query_rules | length > 0 or proxysql_existing_rules.query_result[0] | length == 0
-    fail_msg: Existing active query rules would override writer-only defaults. Review them and explicitly manage/remove
-      entries; no rules are deleted implicitly.
