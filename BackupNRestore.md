@@ -1,3 +1,9 @@
+> **Historical instructions:** the `backup-mysql.sh`, `extract-mysql.sh`, and
+> `prepare-mysql.sh` commands below are not shipped by this checkout. Do not use
+> this as the current restore runbook. Read the
+> [reviewed backup/restore workflow](README_IN_DEPTH.md#6-backup-and-restore-workflow)
+> and [required backup fixes](docs/IMPROVEMENTS.md#p0-fix-before-relying-on-the-stack).
+
 ## Steps for Backup and Restore operations with Backup Server
 Backup and restore on Percoan backup server can performed in 3 easy steps mentioned below.
 

@@ -8,6 +8,19 @@
 
 # Percona Server HA
 
+> **Start with the reviewed documentation (15 October 2026):**
+> [Concepts and terminology](docs/UNDERSTANDING_PERCONA.md) →
+> [In-depth architecture and step-by-step usage](README_IN_DEPTH.md) →
+> [Prioritized improvements](docs/IMPROVEMENTS.md) →
+> [Liquibase integration](docs/LIQUIBASE.md).
+>
+> The overview below contains historical claims that the current implementation
+> does not fully satisfy. In particular, fresh credential bootstrap, backup
+> reliability, restore automation, and safe automatic failover need work. Treat
+> “production-grade,” the stated RTO, and complete idempotence as unverified.
+> The linked guides distinguish implemented behavior from proposed changes and
+> cover the version-support issues before you attempt a new deployment.
+
 A production-grade Ansible role to install, configure, and manage **Percona Server 8.0** on Ubuntu with full High Availability support including Master-Slave replication, automated failover via Orchestrator, query routing via ProxySQL, XtraBackup-based backup to MinIO or local disk, and Prometheus metrics via mysqld_exporter and PMM.
 
 ## Key Features
