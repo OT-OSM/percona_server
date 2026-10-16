@@ -1,0 +1,58 @@
+# Production-readiness gaps and future upgrade roadmap
+
+One line per identified gap, covering the current roles and their future lifecycle; optional capabilities depend on the deployment's requirements, and this backlog does not itself upgrade any software.
+
+- Version lifecycle: Define supported database/component versions, support-expiry tracking, patch cadence and an owner for each upgrade decision using the [Percona lifecycle policy](https://www.percona.com/release-lifecycle-overview/).
+- Database major upgrade: Add an explicit, rehearsed Percona 8.0 → 8.4 upgrade workflow with supported source versions and a deliberate cutover gate; current roles reject 8.4 ([upgrade guidance](https://docs.percona.com/percona-server/8.4/upgrade.html)).
+- Later database releases: Establish a repeatable compatibility review and migration process for supported releases beyond 8.4 instead of permanently hard-coding one generation.
+- Upgrade readiness: Run upgrade checks against schemas, SQL modes, plugins, privileges, removed variables and application connectors before changing packages ([8.4 checklist](https://docs.percona.com/percona-server/8.4/upgrade-checklist-8.4.html)).
+- Version-aware automation: Map repositories, packages, templates, grants, authentication and validations to explicitly supported server versions without weakening accidental-upgrade guards.
+- Authentication migration: Replace the current replication/proxy reliance on mysql_native_password with tested caching_sha2_password and compatible clients; native authentication is disabled by default in 8.4 ([reference](https://dev.mysql.com/doc/refman/8.4/en/native-pluggable-authentication.html)).
+- Backup-tool upgrade: Select XtraBackup per database generation and retain old restore tooling; XtraBackup 8.4 backs up 8.4 servers, not 8.0 ([compatibility](https://docs.percona.com/percona-xtrabackup/8.4/)).
+- Upgrade cutover: Rehearse the supported mixed-version replication window, write fencing, catch-up checks, traffic switch and application verification ([upgrade strategies](https://docs.percona.com/percona-server/8.4/upgrade-strategies.html)).
+- Upgrade recovery: Test recovery from a failed upgrade and account for writes after cutover; do not assume installing older binaries reverses a major upgrade ([downgrade constraints](https://docs.percona.com/percona-server/8.4/upgrade.html)).
+- ProxySQL upgrade: Replace the retained 2.5.5/Ubuntu-20 artifact with a reviewed supported build and test configuration migration, TLS and frontend/backend authentication ([authentication reference](https://proxysql.com/documentation/authentication-methods/)).
+- Orchestrator maintenance: Choose and validate a maintained build or replacement for the retained archived openark release, including metadata, API and recovery-hook compatibility ([upstream status](https://github.com/openark/orchestrator)).
+- Dependency upgrades: Track and test exporter, MinIO client, Ansible, collection, Python-driver and operating-system updates alongside database changes.
+- Reproducible packages: Pin exact tested artifacts and verify checksums/signatures, repository availability and precise server/XtraBackup minor compatibility.
+- Live installation tests: Prove fresh installation, existing-host adoption, configuration-only changes and reboot recovery on every advertised OS/version combination.
+- Composition and idempotency: Test standalone → backup/monitoring → replica → proxy/observer and repeated runs without data loss, credential churn or unnecessary restarts.
+- Automated CI: Gate changes on linting, existing local checks and disposable-VM integration tests rather than syntax and fixture tests alone.
+- Failure-path coverage: Exercise interrupted installs, unavailable repositories, failed restarts, invalid certificates, full disks and failed uploads with documented recovery outcomes.
+- Production inventory: Replace lab examples with reviewed addresses, unique identities, topology, encrypted credentials, environment separation and deployment ownership.
+- Safe input handling: Extend validation across nested user/backend/rule definitions, ports, identifiers and version-specific settings before any changes occur.
+- Operational diagnostics: Preserve useful redacted failure information so credential-protected tasks remain diagnosable without revealing secrets.
+- Capacity testing: Measure query latency, concurrency, disk I/O and backup-time memory pressure; automatic buffer-pool sizing is not a capacity guarantee.
+- Host resource checks: Validate storage space/inodes, mounts, permissions, file-descriptor limits and effective memory budgets, including constrained/shared hosts.
+- Storage flexibility: Add tested custom datadir/mount support only if required; the current server and restore workflows assume /var/lib/mysql.
+- Network controls: Supply and verify firewall rules, private bindings and restricted administrative access through these roles or an explicitly owned infrastructure layer.
+- End-to-end TLS: Complete and test application→proxy→database, replication and remote management/metrics security, including certificate verification and renewal.
+- Credential lifecycle: Test password rotation across databases, channels, proxies and services, including interrupted rotation and separate source/restore-target credentials.
+- Access lifecycle: Review least-privilege grants, account removal, secret-store integration and operator access procedures for the selected deployment.
+- Encryption and audit: Add data-at-rest/key-management recovery and audit-log controls where security requirements demand them, including version-upgrade compatibility.
+- Live backup recovery: Restore real full/incremental chains on isolated hosts, verify application rows/schema and repeat these drills on a schedule.
+- Recovery objectives: Define maximum acceptable data loss and downtime, then measure whether backup, restore and failover procedures meet them.
+- Backup retention: Provide chain-preserving local/object-store cleanup with dry-run visibility and capacity alerts; current retention is manual.
+- Backup protection: Establish off-host isolation, scoped storage permissions, encryption/key recovery and immutable copies where required.
+- Backup observability: Publish backup age, duration, completion, size and restore-test results with alerts for missed jobs and broken chains.
+- Point-in-time recovery: Add durable off-host binlog archiving, retention coordination and tested replay to a chosen time or transaction if required.
+- Restore usability: Add verified chain retrieval from object storage and a rehearsed failed-restore/cutover procedure; chain transfer and final writer activation remain manual.
+- Disaster recovery: Rehearse loss of the entire database host or site, restoring infrastructure, configuration, secrets, keys and data from independently available copies.
+- Replica acceptance: Test GTID continuity, seed/attach, lag, network interruption, restart, purged source history and data consistency under real writes.
+- Replica lifecycle: Add reviewed workflows for adding, replacing, removing and reparenting replicas without accidentally resetting healthy channels.
+- Replication guarantees: Decide whether asynchronous replication meets the data-loss objective; evaluate and test alternatives only if stronger guarantees are required.
+- Failover safety: Supply tested fencing/routing hooks and prove split-brain prevention through crash and network-partition drills before enabling automatic recovery.
+- Planned switchover: Add a controlled writer handover with connection draining, catch-up checks, traffic switching and persistent topology reconciliation.
+- Former-primary recovery: Rehearse quarantine, rebuild/rejoin and failback, including reconciliation of inventory, read-only state and managed-state markers.
+- Orchestrator availability: Add redundant topology management and recoverable metadata if the availability target requires it; the current observer uses local SQLite.
+- Proxy acceptance: Test transactions, prepared statements, connection pooling, reconnect storms, credential rotation and routing persistence after restart.
+- Proxy redundancy: Provide multiple proxies and a tested application endpoint failover mechanism if a single proxy cannot meet the availability target.
+- Read-routing correctness: Add lag-aware routing and verify transaction/session behavior and read-after-write requirements before enabling replica reads.
+- Monitoring integration: Connect exporters to Prometheus/Grafana or implement a reviewed PMM integration; PMM remains archived and external monitoring is not provisioned.
+- Alerting and logs: Add actionable database/replication/storage/certificate alerts, log collection/rotation and delivery to an owned incident-response destination.
+- Maintenance and drift: Rehearse patching, controlled restarts and failed-change recovery, and detect drift between inventory, generated configuration and runtime settings.
+- Liquibase integration: Add an optional application-owned migration job with writer verification, scoped credentials, changelog validation and serialized execution.
+- Schema-change safety: Test migration SQL, backward-compatible application rollout, lock impact and recovery/forward-fix procedures for failed or long-running DDL.
+- Release usability: Publish versioned role releases, a compatibility matrix, migration notes and reproducible examples so existing users can upgrade automation safely.
+- Operational ownership: Complete incident, backup, restore, failover and upgrade runbooks with named owners and retained acceptance evidence.
+- Additional platforms: Add other operating systems, architectures or deployment models only when required and backed by their own packaging and integration tests.

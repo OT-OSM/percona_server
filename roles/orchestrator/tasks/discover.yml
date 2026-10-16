@@ -1,0 +1,16 @@
+---
+- name: Discover each database explicitly
+  ansible.builtin.uri:
+    url: http://{{ orchestrator_listen_address }}:{{ orchestrator_port }}/api/discover/{{ hostvars[item].percona_address
+      }}/{{ hostvars[item].percona_port | default(3306) }}
+    url_username: '{{ orchestrator_http_user }}'
+    url_password: '{{ orchestrator_http_password }}'
+    force_basic_auth: true
+    return_content: true
+  loop: '{{ groups[''database''] }}'
+  register: orchestrator_discover
+  retries: 6
+  delay: 5
+  until: orchestrator_discover.status | default(0) == 200 and orchestrator_discover.json.Code | default('ERROR')
+    == 'OK'
+  no_log: true

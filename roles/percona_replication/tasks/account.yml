@@ -1,0 +1,18 @@
+---
+- name: Create source replication account for each replica
+  community.mysql.mysql_user:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    name: '{{ percona_replication_user }}'
+    host: '{{ hostvars[item].percona_address }}'
+    plugin: mysql_native_password
+    plugin_auth_string: '{{ percona_replication_password }}'
+    priv: '*.*:REPLICATION SLAVE,REPLICATION CLIENT'
+    state: present
+    tls_requires: '{{ {''SSL'': true} if percona_replication_tls else omit }}'
+  no_log: true
+  loop: '{{ groups[''replicas''] }}'
+  when: inventory_hostname == percona_primary
+  register: replication_account

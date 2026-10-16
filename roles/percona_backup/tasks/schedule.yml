@@ -1,0 +1,34 @@
+---
+- name: Remove superseded legacy backup schedules
+  ansible.builtin.cron:
+    name: '{{ item }}'
+    user: root
+    state: absent
+  loop:
+  - "MySQL HA full backup \u2014 weekly"
+  - "MySQL HA incremental backup \u2014 daily"
+- name: Manage full-backup schedule explicitly
+  ansible.builtin.cron:
+    name: Percona full backup
+    user: root
+    minute: '{{ backup_minute }}'
+    hour: '{{ backup_hour }}'
+    weekday: '{{ ''0'' if backup_incremental_enabled | bool else ''*'' }}'
+    job: /usr/local/bin/percona-backup backup full >> /var/log/percona-backup.log 2>&1
+    state: '{{ ''present'' if backup_schedule_enabled | bool else ''absent'' }}'
+- name: Manage incremental schedule explicitly
+  ansible.builtin.cron:
+    name: Percona incremental backup
+    user: root
+    minute: '{{ backup_minute }}'
+    hour: '{{ backup_hour }}'
+    weekday: 1-6
+    job: /usr/local/bin/percona-backup backup incremental >> /var/log/percona-backup.log 2>&1
+    state: '{{ ''present'' if backup_schedule_enabled | bool and backup_incremental_enabled | bool else ''absent'' }}'
+- name: Create private scheduled-job log
+  ansible.builtin.file:
+    path: /var/log/percona-backup.log
+    state: touch
+    mode: '0600'
+    modification_time: preserve
+    access_time: preserve

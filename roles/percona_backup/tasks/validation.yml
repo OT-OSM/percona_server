@@ -1,0 +1,18 @@
+---
+- name: Validate backup account locally
+  community.mysql.mysql_query:
+    config_file: /etc/percona-backup/client.cnf
+    query: SELECT 1
+  changed_when: false
+  no_log: true
+  retries: 12
+  delay: 5
+  register: backup_account_check
+  until: backup_account_check.query_result is defined
+- name: Check backup executable syntax
+  ansible.builtin.command:
+    argv:
+    - python3
+    - -c
+    - import ast; ast.parse(open('/usr/local/bin/percona-backup').read())
+  changed_when: false

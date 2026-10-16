@@ -1,0 +1,37 @@
+---
+- name: Check service-account writer is actually writable
+  community.mysql.mysql_query:
+    login_user: '{{ hostvars[percona_account_host].percona_root_username | default(percona_root_username) }}'
+    login_password: '{{ hostvars[percona_account_host].percona_admin_password | default(percona_root_password) }}'
+    login_unix_socket: '{{ hostvars[percona_account_host].percona_socket | default(percona_socket) }}'
+    config_file: ''
+    query: SELECT @@read_only AS ro, @@super_read_only AS sro
+  delegate_to: '{{ percona_account_host }}'
+  register: component_account_writer
+  changed_when: false
+  no_log: true
+- name: Refuse account changes on a stale or read-only writer
+  ansible.builtin.assert:
+    that:
+    - component_account_writer.query_result[0][0].ro | int == 0
+    - component_account_writer.query_result[0][0].sro | int == 0
+    fail_msg: Update percona_account_host to the verified current writer; read-only protection is never disabled
+      by an add-on.
+- name: Create restricted exporter account on the writer
+  community.mysql.mysql_user:
+    login_user: '{{ hostvars[percona_account_host].percona_root_username | default(percona_root_username) }}'
+    login_password: '{{ hostvars[percona_account_host].percona_admin_password | default(percona_root_password) }}'
+    login_unix_socket: '{{ hostvars[percona_account_host].percona_socket | default(percona_socket) }}'
+    config_file: ''
+    name: '{{ exporter_db_user }}'
+    host: localhost
+    plugin: caching_sha2_password
+    plugin_auth_string: '{{ exporter_db_password }}'
+    priv: '*.*:PROCESS,REPLICATION CLIENT,SELECT'
+    state: present
+    salt: '{{ ((exporter_db_user ~ '':percona-service'') | hash(''sha256''))[:20] }}'
+    resource_limits:
+      MAX_USER_CONNECTIONS: 3
+  no_log: true
+  delegate_to: '{{ percona_account_host }}'
+  throttle: 1

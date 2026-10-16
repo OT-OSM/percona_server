@@ -1,0 +1,7 @@
+---
+percona_version: '8.0'
+percona_gtid_mode: true
+percona_innodb_buffer_pool_size: 512M
+percona_max_connections: 150
+percona_databases: []
+percona_users: []

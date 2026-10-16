@@ -1,0 +1,35 @@
+# {{ ansible_managed }}
+[mysqld]
+user = mysql
+port = {{ percona_port }}
+bind-address = {{ percona_bind_address }}
+socket = {{ percona_socket }}
+datadir = {{ percona_datadir }}
+server-id = {{ percona_server_id }}
+log-bin = mysql-bin
+binlog-format = ROW
+sync-binlog = 1
+log-replica-updates = ON
+binlog-expire-logs-seconds = {{ percona_binlog_expire_logs_seconds }}
+gtid-mode = {{ 'ON' if percona_gtid_mode | bool else 'OFF' }}
+enforce-gtid-consistency = {{ 'ON' if percona_gtid_mode | bool else 'OFF' }}
+read-only = {{ 'ON' if percona_read_only | bool else 'OFF' }}
+super-read-only = {{ 'ON' if percona_read_only | bool else 'OFF' }}
+relay-log = relay-bin
+relay-log-recovery = ON
+skip-name-resolve = ON
+local-infile = OFF
+mysqlx-bind-address = 127.0.0.1
+innodb-buffer-pool-size = {{ percona_innodb_buffer_pool_size }}
+innodb-flush-log-at-trx-commit = 1
+max-connections = {{ percona_max_connections }}
+slow-query-log = ON
+slow-query-log-file = /var/log/mysql/slow.log
+long-query-time = {{ percona_slow_query_time }}
+log-error = /var/log/mysql/error.log
+require-secure-transport = {{ 'ON' if percona_require_secure_transport | bool else 'OFF' }}
+{% if percona_tls_ca %}
+ssl-ca = {{ percona_tls_ca }}
+ssl-cert = {{ percona_tls_cert }}
+ssl-key = {{ percona_tls_key }}
+{% endif %}

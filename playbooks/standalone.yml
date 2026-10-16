@@ -1,0 +1,16 @@
+---
+- name: Install or maintain the first Percona 8.0 database
+  hosts: primary
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  roles:
+  - percona_server
+  serial: 1
+  pre_tasks:
+  - name: Require exactly one declared primary
+    ansible.builtin.assert:
+      that:
+      - groups['primary'] | default([]) | length == 1
+      - inventory_hostname == percona_primary
+      fail_msg: Declare one primary host matching percona_primary.

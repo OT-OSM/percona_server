@@ -1,0 +1,40 @@
+---
+percona_root_username: root
+percona_root_password: ''
+percona_socket: /var/run/mysqld/mysqld.sock
+percona_port: 3306
+percona_version: '8.0'
+percona_install_packages: true
+percona_manage_repository: true
+percona_release_package: https://repo.percona.com/apt/percona-release_latest.generic_all.deb
+percona_server_package_version: ''
+percona_bootstrap_password: ''
+percona_adopt_existing: false
+percona_allow_gtid_enable: false
+percona_server_id: 1
+percona_bind_address: 127.0.0.1
+percona_datadir: /var/lib/mysql
+percona_config_file: /etc/mysql/mysql.conf.d/mysqld.cnf
+percona_read_only: false
+percona_gtid_mode: true
+percona_binlog_expire_logs_seconds: 604800
+# Auto-size the shared InnoDB cache, leaving room for the OS, connections and backups.
+# Override memory_mb on shared/constrained hosts; facts do not enforce container limits.
+# Missing facts use a 1024 MiB sizing input (512M pool at the default percentage).
+percona_memory_mb: '{{ ansible_facts.memtotal_mb | default(1024) }}'
+percona_buffer_pool_percent: 50
+# Match default Linux 8.0 chunk/instance alignment without rounding above the budget.
+# Below 1 GiB use 128 MiB steps; otherwise use 1 GiB steps. Explicit values override.
+percona_innodb_buffer_pool_size: >-
+  {%- set target_mb = percona_memory_mb | int * percona_buffer_pool_percent | int / 100 -%}
+  {%- set step_mb = 1024 if target_mb >= 1024 else 128 -%}
+  {{ [((target_mb / step_mb) | int) * step_mb, 128] | max }}M
+# Connection/query concurrency is workload-dependent, not a percentage of RAM.
+percona_max_connections: 150
+percona_slow_query_time: 2
+percona_databases: []
+percona_users: []
+percona_tls_ca: ''
+percona_tls_cert: ''
+percona_tls_key: ''
+percona_require_secure_transport: false

@@ -1,0 +1,40 @@
+---
+- name: Verify runtime backend state
+  community.mysql.mysql_query:
+    login_user: '{{ proxysql_admin_user }}'
+    login_password: '{{ proxysql_admin_password }}'
+    login_host: 127.0.0.1
+    login_port: 6032
+    config_file: ''
+    query: SELECT hostgroup_id, hostname, port, status FROM runtime_mysql_servers
+  changed_when: false
+  register: proxy_runtime
+  no_log: true
+- name: Require a writer entry in runtime
+  ansible.builtin.assert:
+    that:
+    - proxy_runtime.query_result[0] | selectattr('hostgroup_id', 'equalto', proxysql_writer_hostgroup | int) | selectattr('status',
+      'equalto', 'ONLINE') | list | length == 1
+    fail_msg: Expected exactly one online writer; inspect monitor errors and actual database read_only state.
+- name: Wait for frontend listener
+  ansible.builtin.wait_for:
+    host: '{{ ''127.0.0.1'' if proxysql_listen_address == ''0.0.0.0'' else proxysql_listen_address }}'
+    port: '{{ proxysql_port }}'
+    timeout: 30
+- name: Validate application login through the writer route
+  community.mysql.mysql_query:
+    login_host: '{{ ''127.0.0.1'' if proxysql_listen_address == ''0.0.0.0'' else proxysql_listen_address }}'
+    login_port: '{{ proxysql_port }}'
+    login_user: '{{ item.name }}'
+    login_password: '{{ item.password }}'
+    config_file: ''
+    query: SELECT @@read_only AS ro
+  loop: '{{ proxysql_users | rejectattr(''state'', ''defined'') | list + (proxysql_users | selectattr(''state'',
+    ''defined'') | selectattr(''state'', ''equalto'', ''present'') | list) }}'
+  register: proxy_app_health
+  changed_when: false
+  no_log: true
+  retries: 6
+  delay: 5
+  until: proxy_app_health.query_result is defined and proxy_app_health.query_result[0][0].ro | int == 0
+  when: proxysql_query_rules | length == 0

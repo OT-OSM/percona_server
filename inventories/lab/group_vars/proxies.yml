@@ -1,0 +1,12 @@
+---
+proxysql_listen_address: '{{ ansible_host }}'
+proxysql_source_address: '{{ ansible_host }}'
+proxysql_package_checksum: ''
+proxysql_backends:
+- host: db1
+  hostgroup: 10
+proxysql_users:
+- name: appuser
+  password: '{{ vault_app_password }}'
+  priv: appdb.*:SELECT,INSERT,UPDATE,DELETE
+proxysql_query_rules: []

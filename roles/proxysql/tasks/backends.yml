@@ -1,0 +1,30 @@
+---
+- name: Configure reader and writer classification
+  community.proxysql.proxysql_replication_hostgroups:
+    login_user: '{{ proxysql_admin_user }}'
+    login_password: '{{ proxysql_admin_password }}'
+    login_host: 127.0.0.1
+    login_port: 6032
+    config_file: ''
+    writer_hostgroup: '{{ proxysql_writer_hostgroup }}'
+    reader_hostgroup: '{{ proxysql_reader_hostgroup }}'
+    check_type: read_only
+    comment: percona-ansible
+  no_log: true
+- name: Manage only explicitly listed backend entries
+  community.proxysql.proxysql_backend_servers:
+    login_user: '{{ proxysql_admin_user }}'
+    login_password: '{{ proxysql_admin_password }}'
+    login_host: 127.0.0.1
+    login_port: 6032
+    config_file: ''
+    hostgroup_id: '{{ item.hostgroup }}'
+    hostname: '{{ hostvars[item.host].percona_address }}'
+    port: '{{ hostvars[item.host].percona_port | default(3306) }}'
+    status: '{{ item.status | default(''ONLINE'') }}'
+    max_replication_lag: '{{ item.max_replication_lag | default(10) }}'
+    max_connections: '{{ item.max_connections | default(100) }}'
+    comment: percona-ansible
+    state: '{{ item.state | default(''present'') }}'
+  loop: '{{ proxysql_backends }}'
+  no_log: true

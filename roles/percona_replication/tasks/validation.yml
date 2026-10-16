@@ -1,0 +1,40 @@
+---
+- name: Wait for both replication threads without ignoring errors
+  community.mysql.mysql_replication:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    mode: getreplica
+  register: replication_health
+  changed_when: false
+  no_log: true
+  when: inventory_hostname != percona_primary
+  retries: '{{ percona_replication_retries }}'
+  delay: '{{ percona_replication_delay }}'
+  until:
+  - replication_health.Replica_IO_Running | default(replication_health.Slave_IO_Running | default('No')) == 'Yes'
+  - replication_health.Replica_SQL_Running | default(replication_health.Slave_SQL_Running | default('No')) == 'Yes'
+  - replication_health.Last_IO_Errno | default(1) | int == 0
+  - replication_health.Last_SQL_Errno | default(1) | int == 0
+- name: Check for the isolated restore guard
+  ansible.builtin.stat:
+    path: /etc/mysql/mysql.conf.d/zz-percona-restore.cnf
+  register: replication_restore_guard
+  when: inventory_hostname != percona_primary
+- name: Read target role marker before lifting restore startup isolation
+  ansible.builtin.slurp:
+    src: /etc/mysql/percona-ansible-state.json
+  register: replication_restored_state
+  when: inventory_hostname != percona_primary and replication_restore_guard.stat.exists
+- name: Require a managed read-only baseline beneath the restore guard
+  ansible.builtin.assert:
+    that:
+    - (replication_restored_state.content | b64decode | from_json).read_only | bool
+    fail_msg: The target must have been prepared as a read-only replica before removing restore startup isolation.
+  when: inventory_hostname != percona_primary and replication_restore_guard.stat.exists
+- name: Remove restore startup guard only after healthy explicit attachment
+  ansible.builtin.file:
+    path: /etc/mysql/mysql.conf.d/zz-percona-restore.cnf
+    state: absent
+  when: inventory_hostname != percona_primary and replication_restore_guard.stat.exists

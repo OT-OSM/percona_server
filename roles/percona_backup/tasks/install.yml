@@ -1,0 +1,21 @@
+---
+- name: Install compatible physical backup tooling
+  ansible.builtin.apt:
+    name:
+    - percona-xtrabackup-80
+    - python3-pymysql
+    - python3-cryptography
+    state: present
+    update_cache: true
+- name: Check installed XtraBackup generation
+  ansible.builtin.command:
+    argv:
+    - xtrabackup
+    - --version
+  register: backup_tool
+  changed_when: false
+- name: Reject incompatible backup binary
+  ansible.builtin.assert:
+    that:
+    - (backup_tool.stdout ~ backup_tool.stderr) is search('version 8\.0\.')
+    fail_msg: Install XtraBackup 8.0 compatible with the precise server minor version.

@@ -1,0 +1,6 @@
+---
+percona_server_id: 102
+percona_address: '{{ ansible_host }}'
+percona_bind_address: '{{ percona_address }}'
+percona_read_only: true
+percona_replica_seeded: false

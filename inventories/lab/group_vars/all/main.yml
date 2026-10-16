@@ -1,0 +1,14 @@
+---
+ansible_user: ubuntu
+ansible_become: true
+percona_primary: db1
+percona_root_password: '{{ vault_percona_root_password }}'
+percona_admin_password: '{{ vault_percona_root_password }}'
+percona_account_host: '{{ percona_primary }}'
+percona_replication_password: '{{ vault_replication_password }}'
+backup_db_password: '{{ vault_backup_password }}'
+exporter_db_password: '{{ vault_exporter_password }}'
+proxysql_admin_password: '{{ vault_proxysql_admin_password }}'
+proxysql_monitor_password: '{{ vault_proxysql_monitor_password }}'
+orchestrator_db_password: '{{ vault_orchestrator_db_password }}'
+orchestrator_http_password: '{{ vault_orchestrator_http_password }}'

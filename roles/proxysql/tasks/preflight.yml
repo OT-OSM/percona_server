@@ -1,0 +1,51 @@
+---
+- name: Validate proxy inputs before any changes
+  ansible.builtin.assert:
+    that:
+    - ansible_facts.architecture == 'x86_64'
+    - proxysql_admin_password | length >= 12
+    - proxysql_admin_password is not search('[:;\n\r]')
+    - proxysql_admin_user == 'admin'
+    - proxysql_monitor_password | length >= 12
+    - proxysql_backends | length > 0
+    - percona_account_host in hostvars
+    - not proxysql_install_packages or proxysql_package_checksum | length > 0
+    fail_msg: Provide pinned package URL/checksum, private addresses, backends and Vault credentials. Admin stays
+      local on 6032; credentials cannot contain colon/semicolon.
+- name: Validate each backend
+  ansible.builtin.assert:
+    that:
+    - item.host in hostvars
+    - hostvars[item.host].percona_address is defined
+    - item.hostgroup | int in [proxysql_writer_hostgroup | int, proxysql_reader_hostgroup | int]
+    fail_msg: Each backend must name an inventory database host and a configured hostgroup.
+  loop: '{{ proxysql_backends }}'
+- name: Install Python database driver
+  ansible.builtin.apt:
+    name:
+    - python3-pymysql
+    - python3-cryptography
+    state: present
+- name: Inspect each online backend before changing routing
+  community.mysql.mysql_query:
+    login_user: '{{ hostvars[item.host].percona_root_username | default(percona_root_username) }}'
+    login_password: '{{ hostvars[item.host].percona_admin_password | default(percona_root_password) }}'
+    login_unix_socket: '{{ hostvars[item.host].percona_socket | default(percona_socket) }}'
+    config_file: ''
+    query: SELECT @@read_only AS ro, @@super_read_only AS sro
+  loop: '{{ proxysql_backends }}'
+  when: item.state | default('present') == 'present' and item.status | default('ONLINE') == 'ONLINE'
+  delegate_to: '{{ item.host }}'
+  register: proxy_backend_identity
+  changed_when: false
+  no_log: true
+- name: Refuse stale backend writer/reader assignments
+  ansible.builtin.assert:
+    that:
+    - item.query_result[0][0].ro | int == (0 if item.item.hostgroup | int == proxysql_writer_hostgroup | int else
+      1)
+    - item.query_result[0][0].sro | int == (0 if item.item.hostgroup | int == proxysql_writer_hostgroup | int else
+      1)
+    fail_msg: Inventory hostgroup conflicts with actual read-only state. Reconcile topology before applying proxy
+      changes.
+  loop: '{{ proxy_backend_identity.results | selectattr(''query_result'', ''defined'') | list }}'

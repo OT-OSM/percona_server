@@ -1,0 +1,60 @@
+---
+- name: Read live identity and topology before changing configuration
+  community.mysql.mysql_query:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    query: SELECT @@version AS version, @@version_comment AS vendor, @@read_only AS ro, @@super_read_only AS sro,
+      @@server_id AS sid, @@gtid_mode AS gtid
+  changed_when: false
+  register: percona_live
+- name: Verify server version and explicit GTID transition
+  ansible.builtin.assert:
+    that:
+    - percona_live.query_result[0][0].version is match('^8\.0\.')
+    - '''Percona'' in percona_live.query_result[0][0].vendor'
+    - not percona_existing_data.stat.exists or not percona_gtid_mode or percona_live.query_result[0][0].gtid ==
+      'ON' or percona_allow_gtid_enable | bool
+    fail_msg: Expected Percona 8.0. Enabling GTID on an existing server requires reviewed maintenance and percona_allow_gtid_enable=true.
+- name: Read last applied node identity
+  ansible.builtin.slurp:
+    src: /etc/mysql/percona-ansible-state.json
+  when: percona_state_file.stat.exists
+  register: percona_previous_state
+- name: Refuse stale topology or changed server identity
+  ansible.builtin.assert:
+    that:
+    - percona_live.query_result[0][0].ro | bool == (percona_previous_state.content | b64decode | from_json).read_only
+      | bool
+    - percona_read_only | bool == (percona_previous_state.content | b64decode | from_json).read_only | bool
+    - percona_server_id | int == (percona_previous_state.content | b64decode | from_json).server_id | int
+    fail_msg: Topology/identity differs from last applied state. Reconcile a promotion manually; do not replay a
+      stale inventory.
+  when: percona_state_file.stat.exists
+- name: Create log directory
+  ansible.builtin.file:
+    path: /var/log/mysql
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: '0750'
+- name: Render and validate MySQL configuration
+  ansible.builtin.template:
+    src: mysqld.cnf.j2
+    dest: '{{ percona_config_file }}'
+    owner: root
+    group: root
+    mode: '0644'
+    validate: /usr/sbin/mysqld --defaults-file=%s --validate-config
+  notify: percona_server_restart
+- name: Apply a single notified restart
+  ansible.builtin.meta: flush_handlers
+- name: Record applied identity
+  ansible.builtin.copy:
+    dest: /etc/mysql/percona-ansible-state.json
+    content: '{{ {''server_id'': percona_server_id | int, ''read_only'': percona_read_only | bool} | to_nice_json
+      }}'
+    owner: root
+    group: root
+    mode: '0600'

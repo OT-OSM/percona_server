@@ -1,0 +1,16 @@
+---
+- name: Prepare a new read-only Percona 8.0 candidate
+  hosts: replicas
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  roles:
+  - percona_server
+  serial: 1
+  pre_tasks:
+  - name: Require explicit read-only candidate configuration
+    ansible.builtin.assert:
+      that:
+      - percona_read_only | default(false) | bool
+      - inventory_hostname != percona_primary
+      fail_msg: Set unique ID/address and percona_read_only=true for the new replica.

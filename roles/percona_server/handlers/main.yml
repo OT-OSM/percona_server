@@ -1,0 +1,5 @@
+---
+- name: percona_server_restart
+  ansible.builtin.service:
+    name: mysql
+    state: restarted

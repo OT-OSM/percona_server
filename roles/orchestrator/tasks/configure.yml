@@ -1,0 +1,26 @@
+---
+- name: Render JSON safely including passwords
+  ansible.builtin.template:
+    src: orchestrator.conf.json.j2
+    dest: /etc/orchestrator.conf.json
+    owner: root
+    group: orchestrator
+    mode: '0640'
+    validate: python3 -c 'import json,sys; json.load(open(sys.argv[1]))' %s
+  no_log: true
+  diff: false
+  notify: orchestrator_restart
+- name: Install unprivileged service unit
+  ansible.builtin.template:
+    src: orchestrator.service.j2
+    dest: /etc/systemd/system/orchestrator.service
+    mode: '0644'
+  notify: orchestrator_restart
+- name: Apply orchestration configuration
+  ansible.builtin.meta: flush_handlers
+- name: Enable orchestration service
+  ansible.builtin.systemd:
+    name: orchestrator
+    enabled: true
+    state: started
+    daemon_reload: true

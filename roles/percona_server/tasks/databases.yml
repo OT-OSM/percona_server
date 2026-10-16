@@ -1,0 +1,18 @@
+---
+- name: Keep schema changes on a writable node
+  ansible.builtin.assert:
+    that:
+    - not percona_read_only or percona_databases | length == 0
+    fail_msg: Run database creation on the writer only.
+- name: Manage explicitly listed databases
+  community.mysql.mysql_db:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    name: '{{ item.name }}'
+    encoding: '{{ item.encoding | default(''utf8mb4'') }}'
+    collation: '{{ item.collation | default(''utf8mb4_unicode_ci'') }}'
+    state: present
+  loop: '{{ percona_databases }}'
+  no_log: true

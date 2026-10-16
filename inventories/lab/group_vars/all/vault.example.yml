@@ -1,0 +1,10 @@
+---
+vault_percona_root_password: ''
+vault_replication_password: ''
+vault_backup_password: ''
+vault_exporter_password: ''
+vault_proxysql_admin_password: ''
+vault_proxysql_monitor_password: ''
+vault_app_password: ''
+vault_orchestrator_db_password: ''
+vault_orchestrator_http_password: ''

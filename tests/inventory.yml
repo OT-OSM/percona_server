@@ -1,0 +1,27 @@
+---
+all:
+  children:
+    database:
+      children:
+        primary:
+          hosts:
+            db1:
+              ansible_connection: local
+              percona_address: 192.0.2.11
+        replicas:
+          hosts:
+            db2:
+              ansible_connection: local
+              percona_address: 192.0.2.12
+    backup_sources:
+      hosts:
+        db1: {}
+    monitoring_targets:
+      hosts:
+        db1: {}
+    proxies:
+      hosts: {}
+    orchestrators:
+      hosts: {}
+    restore_targets:
+      hosts: {}

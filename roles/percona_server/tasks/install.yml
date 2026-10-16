@@ -1,0 +1,60 @@
+---
+- name: Install package prerequisites
+  ansible.builtin.apt:
+    name:
+    - gnupg
+    - ca-certificates
+    - python3-pymysql
+    - python3-cryptography
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Install repository manager
+  ansible.builtin.apt:
+    deb: '{{ percona_release_package }}'
+  when: percona_manage_repository | bool
+- name: Inspect enabled repositories
+  ansible.builtin.command:
+    argv:
+    - percona-release
+    - show
+  register: percona_repos
+  changed_when: false
+  when: percona_manage_repository | bool
+- name: Enable only the Percona 8.0 repository
+  ansible.builtin.command:
+    argv:
+    - percona-release
+    - setup
+    - -y
+    - ps80
+  when: percona_manage_repository | bool and 'ps-80' not in percona_repos.stdout and 'ps80' not in percona_repos.stdout
+  changed_when: true
+- name: Refresh package metadata
+  ansible.builtin.apt:
+    update_cache: true
+- name: Inspect server package candidate
+  ansible.builtin.command:
+    argv:
+    - apt-cache
+    - policy
+    - percona-server-server
+  environment:
+    LC_ALL: C
+  register: percona_candidate
+  changed_when: false
+- name: Refuse an implicit major upgrade
+  ansible.builtin.assert:
+    that:
+    - '(percona_server_package_version | length > 0 and percona_server_package_version is match(''^8\.0\.'')) or
+      (percona_server_package_version | length == 0 and percona_candidate.stdout is search(''Candidate: 8\.0\.''))'
+    fail_msg: No 8.0 candidate available. Configure an authorized 8.0 repository/mirror; this project never switches
+      to 8.4.
+- name: Install Percona Server 8.0
+  ansible.builtin.apt:
+    name: '{{ ''percona-server-server'' ~ (''='' ~ percona_server_package_version if percona_server_package_version
+      | length else '''') }}'
+    state: present
+    allow_downgrade: false
+  environment:
+    DEBIAN_FRONTEND: noninteractive

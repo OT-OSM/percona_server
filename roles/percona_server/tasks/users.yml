@@ -1,0 +1,22 @@
+---
+- name: Keep general account changes on a writable node
+  ansible.builtin.assert:
+    that:
+    - not percona_read_only or percona_users | length == 0
+    fail_msg: Run account creation on the writer; service roles manage their own accounts.
+- name: Manage explicitly listed application accounts
+  community.mysql.mysql_user:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    name: '{{ item.name }}'
+    host: '{{ item.host | default(''localhost'') }}'
+    plugin: '{{ item.plugin | default(''caching_sha2_password'') }}'
+    plugin_auth_string: '{{ item.password }}'
+    salt: '{{ ((item.name ~ '':'' ~ (item.host | default(''localhost''))) | hash(''sha256''))[:20] if item.plugin
+      | default(''caching_sha2_password'') == ''caching_sha2_password'' else omit }}'
+    priv: '{{ item.priv }}'
+    state: '{{ item.state | default(''present'') }}'
+  loop: '{{ percona_users }}'
+  no_log: true

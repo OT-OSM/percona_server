@@ -1,0 +1,28 @@
+---
+- name: Require deliberately tested fencing and routing before enabling recovery
+  ansible.builtin.assert:
+    that:
+    - orchestrator_recovery_tested | bool
+    - orchestrator_recovery_filters | length > 0
+    - orchestrator_fencing_hook is match('^/[a-zA-Z0-9_./-]+$')
+    - orchestrator_routing_hook is match('^/[a-zA-Z0-9_./-]+$')
+    fail_msg: Recovery needs tested, synchronous fencing and routing executables, explicit cluster filters and orchestrator_recovery_tested=true.
+  when: orchestrator_recovery_enabled | bool
+- name: Inspect supplied recovery hooks
+  ansible.builtin.stat:
+    path: '{{ item }}'
+  loop:
+  - '{{ orchestrator_fencing_hook }}'
+  - '{{ orchestrator_routing_hook }}'
+  register: orchestrator_hooks
+  when: orchestrator_recovery_enabled | bool
+  become_user: orchestrator
+- name: Require installed executable hooks
+  ansible.builtin.assert:
+    that:
+    - item.stat.exists
+    - item.stat.isreg
+    - item.stat.executable
+    fail_msg: Install recovery hooks and test them as the orchestrator service user before enabling recovery.
+  loop: '{{ orchestrator_hooks.results | default([]) }}'
+  when: orchestrator_recovery_enabled | bool

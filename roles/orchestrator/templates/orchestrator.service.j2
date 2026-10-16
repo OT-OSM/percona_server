@@ -1,0 +1,16 @@
+[Unit]
+Description=MySQL topology observer and explicit recovery manager
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=orchestrator
+Group=orchestrator
+WorkingDirectory=/opt/orchestrator-{{ orchestrator_version }}
+ExecStart=/opt/orchestrator-{{ orchestrator_version }}/orchestrator --config=/etc/orchestrator.conf.json http
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=true
+UMask=0077
+[Install]
+WantedBy=multi-user.target

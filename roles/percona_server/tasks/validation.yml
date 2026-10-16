@@ -1,0 +1,22 @@
+---
+- name: Validate running server
+  community.mysql.mysql_query:
+    login_user: '{{ percona_root_username }}'
+    login_password: '{{ percona_root_password }}'
+    login_unix_socket: '{{ percona_socket }}'
+    config_file: ''
+    query: SELECT @@version AS version, @@server_id AS sid, @@read_only AS ro, @@super_read_only AS sro, @@gtid_mode
+      AS gtid, @@log_bin AS binlog, @@log_replica_updates AS replica_updates
+  changed_when: false
+  register: percona_check
+- name: Assert configured identity and replication-ready baseline
+  ansible.builtin.assert:
+    that:
+    - percona_check.query_result[0][0].version is match('^8\.0\.')
+    - percona_check.query_result[0][0].sid | int == percona_server_id | int
+    - percona_check.query_result[0][0].ro | bool == percona_read_only | bool
+    - percona_check.query_result[0][0].sro | bool == percona_read_only | bool
+    - percona_check.query_result[0][0].binlog | int == 1
+    - percona_check.query_result[0][0].replica_updates | int == 1
+    - not percona_gtid_mode or percona_check.query_result[0][0].gtid == 'ON'
+    fail_msg: Live MySQL configuration does not match the requested baseline.

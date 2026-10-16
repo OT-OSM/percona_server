@@ -1,0 +1,11 @@
+---
+- name: Enable explicitly tested recovery hooks
+  hosts: orchestrators
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  roles:
+  - orchestrator
+  serial: 1
+  vars:
+    orchestrator_recovery_enabled: true

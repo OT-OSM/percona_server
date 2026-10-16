@@ -1,0 +1,24 @@
+---
+percona_root_username: root
+percona_root_password: ''
+percona_socket: /var/run/mysqld/mysqld.sock
+percona_port: 3306
+percona_account_host: '{{ percona_primary }}'
+proxysql_version: 2.5.5
+proxysql_package_url: https://github.com/sysown/proxysql/releases/download/v{{ proxysql_version }}/proxysql_{{ proxysql_version
+  }}-ubuntu20_amd64.deb
+proxysql_package_checksum: ''
+proxysql_install_packages: true
+proxysql_admin_user: admin
+proxysql_admin_password: ''
+proxysql_bootstrap_admin_password: admin
+proxysql_listen_address: 127.0.0.1
+proxysql_port: 6033
+proxysql_writer_hostgroup: 10
+proxysql_reader_hostgroup: 20
+proxysql_monitor_user: proxysql_monitor
+proxysql_monitor_password: ''
+proxysql_source_address: '{{ ansible_host | default(inventory_hostname) }}'
+proxysql_backends: []
+proxysql_users: []
+proxysql_query_rules: []
