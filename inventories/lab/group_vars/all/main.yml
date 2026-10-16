@@ -1,4 +1,6 @@
 ---
+# Shared environment settings; only override role defaults when needed.
+# Host-specific settings belong in host_vars/<inventory-name>.yml.
 ansible_user: ubuntu
 ansible_become: true
 percona_primary: db1

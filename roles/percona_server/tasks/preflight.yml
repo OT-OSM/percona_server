@@ -6,7 +6,8 @@
     - percona_metrics_enabled is not defined
     - percona_backup_server is not defined
     - percona_orchestrator_install is not defined
-    fail_msg: Legacy all-in-one switches are not accepted. Follow docs/migration.md and choose component playbooks.
+    - percona_datadir is not defined
+    fail_msg: Legacy all-in-one switches and percona_datadir are not accepted. Remove percona_datadir from inventory; the supported data directory is fixed at /var/lib/mysql. Follow docs/migration.md for component playbooks.
 - name: Validate the supported server baseline
   ansible.builtin.assert:
     that:
@@ -17,7 +18,6 @@
     - percona_root_password != 'changeme'
     - percona_server_id | int > 0
     - percona_server_id | int <= 4294967295
-    - percona_datadir == '/var/lib/mysql'
     - not percona_require_secure_transport or (percona_tls_ca | length > 0 and percona_tls_cert | length > 0 and
       percona_tls_key | length > 0)
     - percona_read_only is boolean
@@ -38,7 +38,7 @@
     fail_msg: Use an integer sizing budget of at least 512 MiB, a buffer-pool percentage from 10 to 75, and a positive connection limit. Review actual workload headroom; these checks do not guarantee sufficient RAM.
 - name: Inspect existing data directory
   ansible.builtin.stat:
-    path: '{{ percona_datadir }}/mysql'
+    path: /var/lib/mysql/mysql
   register: percona_existing_data
 - name: Inspect managed-state marker
   ansible.builtin.stat:
