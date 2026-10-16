@@ -1,6 +1,1 @@
-*.retry
-__pycache__/
-.pytest_cache/
-.ansible/
-inventories/**/vault.yml
-!inventories/**/vault.example.yml
+
