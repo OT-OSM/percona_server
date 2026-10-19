@@ -25,6 +25,21 @@
     weekday: 1-6
     job: /usr/local/bin/percona-backup backup incremental >> /var/log/percona-backup.log 2>&1
     state: '{{ ''present'' if backup_schedule_enabled | bool and backup_incremental_enabled | bool else ''absent'' }}'
+- name: Manage backup retention pruning
+  ansible.builtin.cron:
+    name: Percona backup prune
+    user: root
+    minute: '{{ backup_prune_minute }}'
+    hour: '{{ backup_prune_hour }}'
+    job: /usr/local/bin/percona-backup prune --retention-days {{ backup_retention_days }} >> /var/log/percona-backup.log 2>&1
+    state: '{{ ''present'' if backup_prune_enabled | bool else ''absent'' }}'
+- name: Mirror archived binlogs to MinIO
+  ansible.builtin.cron:
+    name: Percona binlog MinIO mirror
+    user: root
+    minute: '*/15'
+    job: /usr/local/bin/mc --config-dir /etc/percona-backup/mc mirror --overwrite --remove {{ backup_binlog_path }} backup/{{ backup_minio_bucket }}/{{ inventory_hostname }}-binlog >> /var/log/percona-backup.log 2>&1
+    state: '{{ ''present'' if backup_binlog_archive_enabled | bool and backup_storage == ''minio'' else ''absent'' }}'
 - name: Create private scheduled-job log
   ansible.builtin.file:
     path: /var/log/percona-backup.log

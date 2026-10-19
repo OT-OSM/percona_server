@@ -48,4 +48,7 @@ group-replication-start-on-boot = ON
 group-replication-bootstrap-group = OFF
 group-replication-recovery-get-public-key = ON
 group-replication-consistency = BEFORE_ON_PRIMARY_FAILOVER
+{% if percona_gr_ssl | bool %}
+group-replication-ssl-mode = REQUIRED
+{% endif %}
 {% endif %}

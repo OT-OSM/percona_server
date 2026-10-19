@@ -24,6 +24,31 @@ sudo /usr/local/bin/percona-backup backup incremental
 | `backup_incremental_enabled` | `false`; when true: Sunday full, Mon–Sat incremental |
 | `backup_storage` | `local` or `minio` |
 | `backup_hour` / `backup_minute` | `1` / `0` |
+| `backup_retention_days` | `7`; prune runs daily at 02:30 and always keeps the newest chain |
+| `backup_binlog_archive_enabled` | `true`; rotated binlogs are shipped every 5 minutes |
+
+## Retention
+
+`sudo /usr/local/bin/percona-backup prune --retention-days 7` deletes complete
+backups older than the retention window. The newest complete backup and its
+whole ancestor chain are always kept, so pruning can never remove the only
+restorable chain. Archived binlogs older than the oldest kept backup are aged
+out at the same time. A daily cron runs this automatically
+(`backup_prune_enabled`).
+
+```bash
+# Inspect before you prune
+sudo /usr/local/bin/percona-backup status
+```
+
+## Binlog archiving and point-in-time recovery
+
+Every five minutes the backup source copies rotated (finished) binary logs to
+`backup_binlog_path` (`/var/backup/binlog`); with MinIO storage they are also
+mirrored to `<bucket>/<host>-binlog`. The active log is skipped because the
+server is still writing to it. This gives point-in-time recovery: restore a
+full backup to an isolated VM, then replay the archived binlogs up to the
+target moment. The exact steps are in `docs/operations.md`.
 
 ## Optional MinIO
 
@@ -51,4 +76,4 @@ ansible-playbook -i inventories/lab/ha.yml playbooks/restore.yml --ask-vault-pas
 
 Restore preserves the target's previous datadir, prepares a working copy and starts the restored database read-only. Use the **root password stored in the backup** when the restored server starts; keep source and target credentials identical for this simple workflow. It does not join the target to the group or promote it.
 
-No automatic retention deletion, remote DR, binlog archiving or point-in-time replay is implemented in this initial setup. Monitor backup disk use.
+Retention pruning, binlog archiving and point-in-time replay are implemented (see above). Still not implemented: remote DR site, cross-region copies beyond MinIO mirroring. Monitor backup disk use; `status` shows the newest backup age at a glance.

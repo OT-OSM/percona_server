@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Local staged XtraBackup 8.4 chains, optional verified-TLS MinIO publication.
-No automatic deletion, password arguments, shell interpolation, or in-place prepare.
+"""Local staged XtraBackup 8.4 chains with retention pruning and status,
+optional verified-TLS MinIO publication.
+No password arguments, shell interpolation, or in-place prepare.
 """
 import argparse
 import fcntl
@@ -180,6 +181,118 @@ def prepare(config, backup_id, workdir):
             'source_uuid': base['source_uuid'], 'backup_id': backup_id}
 
 
+def list_backups(root):
+    """Split stored backups into complete and suspect, oldest first.
+
+    Complete means manifest.json plus _SUCCESS.json with a matching checksum.
+    Suspect entries are reported, never deleted.
+    """
+    complete, suspect = [], []
+    for folder in sorted(root.iterdir()):
+        if not folder.is_dir() or folder.name.startswith('.partial-'):
+            continue
+        manifest_path = folder / 'manifest.json'
+        marker_path = folder / '_SUCCESS.json'
+        if not manifest_path.exists() or not marker_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            marker = json.loads(marker_path.read_text())
+            if marker.get('manifest_sha256') != digest(manifest_path):
+                raise ValueError('manifest checksum mismatch')
+            manifest['_folder'] = folder
+            complete.append(manifest)
+        except (OSError, ValueError, KeyError) as error:
+            suspect.append((folder.name, str(error)))
+    complete.sort(key=lambda item: item.get('created_utc', ''))
+    return complete, suspect
+
+
+def status(config):
+    root = Path(config['path'])
+    complete, suspect = list_backups(root)
+    latest = complete[-1] if complete else None
+    result = {'complete_backups': len(complete),
+              'suspect_backups': [name for name, _ in suspect],
+              'latest': None}
+    if latest:
+        created = datetime.fromisoformat(latest['created_utc'])
+        age_hours = (datetime.now(timezone.utc) - created).total_seconds() / 3600
+        result['latest'] = {'id': latest['id'], 'kind': latest['kind'],
+                            'created_utc': latest['created_utc'],
+                            'age_hours': round(age_hours, 1)}
+    return result
+
+
+def prune(config, retention_days):
+    """Delete complete backups older than retention, keeping the newest chain.
+
+    The newest complete backup and its whole ancestor chain are always kept,
+    so pruning can never remove the only restorable chain. Suspect entries
+    are reported and left alone. Stale partial directories from crashed
+    runs are removed after 24 hours.
+    """
+    root = Path(config['path'])
+    complete, suspect = list_backups(root)
+    by_id = {item['id']: item for item in complete}
+    protected = set()
+    if complete:
+        current = complete[-1]['id']
+        while current and current in by_id and current not in protected:
+            protected.add(current)
+            current = by_id[current].get('parent')
+    cutoff = datetime.now(timezone.utc).timestamp() - retention_days * 86400
+    pruned = []
+    for manifest in complete:
+        if manifest['id'] in protected:
+            continue
+        created = datetime.fromisoformat(manifest['created_utc']).timestamp()
+        if created >= cutoff:
+            continue
+        if config['storage'] == 'minio':
+            remote = config['remote'].rstrip('/') + '/' + manifest['id']
+            mc = [config.get('mc', 'mc'), '--config-dir', config['mc_config_dir']]
+            run(mc + ['rm', '--recursive', '--force', remote])
+        shutil.rmtree(manifest['_folder'])
+        pruned.append(manifest['id'])
+    for folder in root.iterdir():
+        if folder.is_dir() and folder.name.startswith('.partial-'):
+            age = datetime.now(timezone.utc).timestamp() - folder.stat().st_mtime
+            if age > 86400:
+                shutil.rmtree(folder)
+                pruned.append(folder.name + ' (partial)')
+    remaining = [item for item in complete if item['id'] not in pruned]
+    pruned_binlogs = prune_binlogs(config, remaining)
+    return {'pruned': pruned, 'protected': sorted(protected),
+            'suspect_skipped': [name for name, _ in suspect],
+            'pruned_binlogs': pruned_binlogs}
+
+
+def prune_binlogs(config, remaining):
+    """Delete archived binlogs older than the oldest kept backup.
+
+    Point-in-time recovery replays binlogs written after a full backup, so a
+    binlog older than the oldest remaining complete backup (minus a day of
+    margin) can never be needed. When no complete backup remains, everything
+    is kept.
+    """
+    pruned = []
+    binlog_path = config.get('binlog_path')
+    if not binlog_path or not remaining:
+        return pruned
+    archive = Path(binlog_path)
+    if not archive.is_dir():
+        return pruned
+    oldest = min(datetime.fromisoformat(item['created_utc']).timestamp()
+                 for item in remaining)
+    cutoff = oldest - 86400
+    for entry in archive.iterdir():
+        if entry.is_file() and entry.stat().st_mtime < cutoff:
+            entry.unlink()
+            pruned.append(entry.name)
+    return pruned
+
+
 def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -190,12 +303,23 @@ def main():
     restoration = sub.add_parser('prepare')
     restoration.add_argument('--backup-id', required=True)
     restoration.add_argument('--workdir', required=True)
+    pruning = sub.add_parser('prune')
+    pruning.add_argument('--retention-days', type=int, required=True)
+    sub.add_parser('status')
     args = parser.parse_args()
     config = json.loads(Path(args.config).read_text())
     root = Path(config['path']); root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if args.command == 'status':
+        print(json.dumps(status(config)))
+        return
     with (root / '.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        result = take_backup(config, args.kind) if args.command == 'backup' else prepare(config, args.backup_id, args.workdir)
+        if args.command == 'backup':
+            result = take_backup(config, args.kind)
+        elif args.command == 'prepare':
+            result = prepare(config, args.backup_id, args.workdir)
+        else:
+            result = prune(config, args.retention_days)
     print(json.dumps({key: value for key, value in result.items() if key != 'files'}))
 
 

@@ -72,4 +72,8 @@ percona_group_port: 33061
 percona_group_seed: "{{ groups.get('gr_members', ['db1']) | first }}"
 percona_group_user: gr_recovery
 percona_group_password: ''
+# Encrypt group communication and distributed recovery with TLS. The value must
+# be identical on every member; enabling it on a running group needs a rolling
+# STOP/START GROUP_REPLICATION, so decide before the first bootstrap.
+percona_gr_ssl: false
 percona_address: '{{ ansible_host | default(inventory_hostname) }}'

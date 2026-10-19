@@ -44,7 +44,7 @@
       login_password: '{{ percona_root_password }}'
       login_unix_socket: '{{ percona_socket }}'
       config_file: ''
-      query: CHANGE REPLICATION SOURCE TO SOURCE_USER=%s, SOURCE_PASSWORD=%s FOR CHANNEL 'group_replication_recovery'
+      query: CHANGE REPLICATION SOURCE TO SOURCE_USER=%s, SOURCE_PASSWORD=%s{{ ', SOURCE_SSL=1' if percona_gr_ssl | bool else '' }} FOR CHANNEL 'group_replication_recovery'
       positional_args:
       - '{{ percona_group_user }}'
       - '{{ percona_group_password }}'

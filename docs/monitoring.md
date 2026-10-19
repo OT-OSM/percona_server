@@ -24,19 +24,14 @@ scrape_configs:
   - targets: ['192.0.2.11:9104', '192.0.2.12:9104', '192.0.2.13:9104']
 ```
 
-Start with the `mysql_up` metric and the `mysql_perf_schema_replication_group_*` series. Add this rule to an existing Prometheus rule file:
+Start with the `mysql_up` metric and the `mysql_perf_schema_replication_group_*` series. This repository ships ready-made rules in `monitoring/mysql_alerts.yml`; copy its groups into an existing Prometheus rule file and keep the job name (`percona`) in sync with your scrape config.
 
-```yaml
-groups:
-- name: percona
-  rules:
-  - alert: PerconaUnavailable
-    expr: up{job="percona"} == 0 or mysql_up{job="percona"} == 0
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: 'Percona or exporter unavailable: {{ $labels.instance }}'
-```
+Key metrics to watch:
 
-Alert delivery and Grafana dashboards must be connected in your monitoring platform. No dashboard is automatically installed in this basic setup.
+| Metric | Meaning |
+|---|---|
+| `mysql_up` | Exporter can reach MySQL. |
+| `mysql_perf_schema_replication_group_member_info` | One series per known member, with `member_state` and `member_role` labels. |
+| `mysql_perf_schema_transactions_in_queue` | Transactions waiting in a member's applier queue; sustained growth means lag. |
+
+Alert delivery and Grafana dashboards must be connected in your monitoring platform. No dashboard is automatically installed in this basic setup. Backup freshness is checked by `playbooks/verify.yml` (a backup newer than 30 hours); wire its failure into your alerting if backups are part of your SLA.

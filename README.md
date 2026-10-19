@@ -39,6 +39,18 @@ ansible-playbook playbooks/standalone.yml --ask-vault-pass
 ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
 ```
 
+5. Before the first run, fail fast on inventory mistakes:
+
+```bash
+ansible-playbook -i inventories/lab/ha.yml playbooks/preflight.yml --ask-vault-pass
+```
+
+6. After deploy, or any time you want a health answer in one command:
+
+```bash
+ansible-playbook -i inventories/lab/ha.yml playbooks/verify.yml --ask-vault-pass
+```
+
 HA initially exposes each proxy on **6033**. To add one stable VIP, edit [proxy settings](inventories/lab/group_vars/proxies.yml): enable `proxysql_ha_enabled`, set the interface and an unused VIP, then rerun `playbooks/proxysql.yml` with the HA inventory. The network must support the VIP/VRRP arrangement.
 
 ## Six roles
@@ -78,12 +90,12 @@ curl http://<database-ip>:9104/metrics
 sudo /usr/local/bin/percona-backup backup full
 ```
 
-## Scope of this first setup
+## Scope of this setup
 
 Default datadir `/var/lib/mysql`; binlogs stay there. Fresh members join using retained binary logs; no automatic cloning or data replacement. Existing 8.0 servers are not upgraded by these playbooks.
 
-Included: basic group setup, writer routing, optional proxy VIP, physical backups, exporters. Deferred: hardening, custom storage, live tuning without restarts, rolling upgrades, whole-cluster disaster recovery, binlog archiving/PITR, retention deletion and cross-site DR. Prometheus/Grafana are external; monitoring examples are supplied in the guide.
+Included: preflight checks, group setup, writer routing, optional proxy VIP, physical backups with retention pruning, binlog archiving with point-in-time replay steps, exporters, Prometheus alert rules, one-command verify playbook. Deferred: client hardening review, custom storage, live tuning without restarts, rolling upgrades, whole-cluster disaster recovery, cross-site DR. Prometheus/Grafana are external; monitoring examples are supplied in the guide.
 
-There are no separate preflight/validation roles or files. Essential setup checks remain around version replacement, bootstrap and restores. This branch has local checks; it is **not yet live-deployment or production validated**.
+Before a client deploy, work through [the production checklist](docs/production-checklist.md). Day-to-day procedures live in [the operations runbook](docs/operations.md); when something breaks, start at [troubleshooting](docs/troubleshooting.md).
 
-[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Single-Proxy HA runbook](docs/runbook-single-proxy-ha.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md)
+[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md) · [Production checklist](docs/production-checklist.md) · [Operations runbook](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Local 4-server run](LOCAL-RUN.md)

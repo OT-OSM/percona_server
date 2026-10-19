@@ -13,7 +13,7 @@
     host: localhost
     plugin: caching_sha2_password
     plugin_auth_string: '{{ backup_db_password }}'
-    priv: '*.*:BACKUP_ADMIN,PROCESS,RELOAD,LOCK TABLES,REPLICATION CLIENT,SELECT'
+    priv: '*.*:BACKUP_ADMIN,PROCESS,RELOAD,LOCK TABLES,REPLICATION CLIENT,REPLICATION SLAVE,SELECT'
     state: present
     salt: '{{ ((backup_db_user ~ '':percona-service'') | hash(''sha256''))[:20] }}'
   no_log: true

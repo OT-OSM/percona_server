@@ -10,3 +10,6 @@
   when: backup_storage == 'minio'
 - name: Schedule
   ansible.builtin.import_tasks: schedule.yml
+- name: Binlog archiving
+  ansible.builtin.import_tasks: binlog_archive.yml
+  when: backup_binlog_archive_enabled | bool
