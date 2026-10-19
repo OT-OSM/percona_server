@@ -15,7 +15,7 @@ proxysql_query_rules: []
 ```
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/proxysql.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/proxysql.yml --ask-vault-pass
 ```
 
 [Defaults](defaults/main.yml) · [Tasks](tasks/main.yml) · [Project setup](../../README.md)

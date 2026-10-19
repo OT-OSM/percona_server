@@ -35,7 +35,7 @@ def walk_tasks(value):
 
 def main():
     files = [*ROOT.glob('*.yml'), *ROOT.glob('roles/**/*.yml'),
-             *ROOT.glob('playbooks/*.yml'), *ROOT.glob('inventories/**/*.yml')]
+             *ROOT.glob('playbooks/**/*.yml'), *ROOT.glob('inventories/**/*.yml')]
     modules = {}
     for path in files:
         if path.name == 'vault.yml':
@@ -55,7 +55,7 @@ def main():
         for path, args in uses:
             assert not set(args) - valid, (path, module, set(args) - valid)
     print('YAML and installed module arguments: passed')
-    plays = sorted(ROOT.glob('playbooks/*.yml'))
+    plays = sorted(ROOT.glob('playbooks/**/*.yml'))
     for play in plays:
         run(['ansible-playbook', '-i', str(ROOT/'tests/inventory.yml'), str(play), '--syntax-check'])
     print(f'Playbook syntax: {len(plays)} passed')

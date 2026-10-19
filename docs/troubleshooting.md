@@ -19,7 +19,7 @@ FROM performance_schema.replication_group_members;
 | UNREACHABLE | Network or firewall | From the member: `nc -zv <peer> 33061`. Open TCP 33061 and 3306 between members. |
 | OFFLINE | Group Replication stopped | `START GROUP_REPLICATION;` and watch the state. |
 
-After the fix: all members ONLINE, one PRIMARY, then `playbooks/verify.yml`.
+After the fix: all members ONLINE, one PRIMARY, then `playbooks/operations/verify.yml`.
 
 ## No PRIMARY (writes stopped)
 
@@ -37,11 +37,11 @@ SELECT * FROM monitor.mysql_server_group_replication_log ORDER BY time_start_us 
 ```
 
 - If the monitor shows connection errors, the monitor user is broken.
-  Recreate it by rerunning `playbooks/proxysql.yml`; the role creates
+  Recreate it by rerunning `playbooks/operations/proxysql.yml`; the role creates
   `proxysql_monitor` on the current writer with the needed grants.
 - If the monitor is fine but the writer never moves, check
   `mysql_group_replication_hostgroups`: exactly one row, `active=1`,
-  `max_writers=1`. Rerun `playbooks/proxysql.yml` to reconcile it.
+  `max_writers=1`. Rerun `playbooks/operations/proxysql.yml` to reconcile it.
 - Remember: ProxySQL moves the writer only after the group elects a new
   PRIMARY. Fix the group first.
 
@@ -85,7 +85,7 @@ for your version before editing the tasks.
 
 ## Ansible cannot reach a host
 
-`playbooks/preflight.yml` covers the common cases. Beyond that: check the
+`playbooks/operations/preflight.yml` covers the common cases. Beyond that: check the
 `ansible_host` IPs in the inventory, the `ubuntu` user, and that your SSH key
 is in `authorized_keys`. `host_key_checking` is on by default in
 `ansible.cfg`; the first connection asks to accept the host key.

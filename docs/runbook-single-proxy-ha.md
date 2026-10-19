@@ -44,18 +44,18 @@ Restrict database, exporter, and admin access to the required hosts/networks; do
 
 ## 2. Set inventory and credentials
 
-Edit `inventories/lab/ha.yml` and replace the example addresses for `db1`, `db2`, `db3`, and `proxy1`. Assign a unique `percona_server_id` to each database node. The inventory already assigns `db3` as the backup source and all three database nodes as monitoring targets.
+Edit `inventories/group-two-proxies.yml` and replace the example addresses for `db1`, `db2`, `db3`, and `proxy1`. Assign a unique `percona_server_id` to each database node. The inventory already assigns `db3` as the backup source and all three database nodes as monitoring targets.
 
-Set a fresh Group Replication UUID in `inventories/lab/group_vars/all/main.yml`:
+Set a fresh Group Replication UUID in `inventories/group_vars/all/main.yml`:
 
 ```bash
 python3 -c 'import uuid; print(uuid.uuid4())'
 ```
 
-Copy the key names from `inventories/lab/group_vars/all/vault.example.yml` into an encrypted vault file and provide non-empty, strong values:
+Copy the key names from `inventories/group_vars/all/vault.example.yml` into an encrypted vault file and provide non-empty, strong values:
 
 ```bash
-ansible-vault create inventories/lab/group_vars/all/vault.yml
+ansible-vault create inventories/group_vars/all/vault.yml
 ```
 
 Required keys: `vault_percona_root_password`, `vault_replication_password`, `vault_backup_password`, `vault_exporter_password`, `vault_proxysql_admin_password`, `vault_proxysql_monitor_password`, and `vault_app_password`. Use the same root and Group Replication credentials across this sample cluster. Do not commit the encrypted vault or put plaintext secrets in inventory.
@@ -67,13 +67,13 @@ The sample inventory enables daily local full backups. MinIO is not enabled by d
 Review the hosts Ansible will target:
 
 ```bash
-ansible-inventory -i inventories/lab/ha.yml --graph --ask-vault-pass
+ansible-inventory -i inventories/group-two-proxies.yml --graph --ask-vault-pass
 ```
 
 The one-proxy deployment uses a limit to omit `proxy2`, but **includes every Group Replication member**. If you rename the hosts, update the limit accordingly:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml \
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml \
   --limit 'db1,db2,db3,proxy1' --syntax-check --ask-vault-pass
 ```
 
@@ -84,7 +84,7 @@ Do not use a limit that omits any of `db1`, `db2`, or `db3`; the group setup mus
 Run the complete deployment. The limit keeps the database group intact while deploying only `proxy1` from the proxy group:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml \
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml \
   --limit 'db1,db2,db3,proxy1' --ask-vault-pass
 ```
 
@@ -142,13 +142,13 @@ Add the three exporter endpoints to an existing Prometheus scrape configuration;
 After changing database settings, apply them one node at a time:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/configure.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/configure.yml --ask-vault-pass
 ```
 
 To reconfigure only the selected proxy, include the limit:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/proxysql.yml \
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/proxysql.yml \
   --limit proxy1 --ask-vault-pass
 ```
 

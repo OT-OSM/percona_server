@@ -1,7 +1,6 @@
 ---
-# Four-server lab: three Group Replication members + one ProxySQL.
-# The reference 5-VM example (inventories/lab/ha.yml) adds a second proxy.
-# Usage: ansible-playbook -i inventories/lab/ha-4server.yml playbooks/ha.yml --ask-vault-pass
+# 2. Five VMs: three database members + two ProxySQL servers. Backups + exporters included.
+# Choose this file only; replace ansible_host addresses with your VM IPs.
 all:
   children:
     database:
@@ -21,6 +20,10 @@ all:
       hosts:
         proxy1:
           ansible_host: 192.0.2.21
+          proxysql_ha_priority: 110
+        proxy2:
+          ansible_host: 192.0.2.22
+          proxysql_ha_priority: 100
     backup_sources:
       hosts:
         db3: {}

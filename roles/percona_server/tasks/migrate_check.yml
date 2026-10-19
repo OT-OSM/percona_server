@@ -59,7 +59,7 @@
 - name: Require backup tooling before migration
   ansible.builtin.assert:
     that: migrate_backup_tool.stat.exists
-    fail_msg: Run playbooks/backup.yml against the standalone first, so a full backup exists before migration.
+    fail_msg: Run playbooks/operations/backup.yml against the standalone first, so a full backup exists before migration.
 - name: Take a full safety backup of the seed
   ansible.builtin.command:
     argv:

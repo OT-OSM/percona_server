@@ -36,9 +36,9 @@ ansible-galaxy collection install -r requirements.yml
 
 ## 3. Inventory, group name, secrets
 
-Edit `inventories/lab/ha-4server.yml` and replace the four example IPs with your real ones.
+Edit `inventories/group-one-proxy.yml` and replace the four example IPs with your real ones.
 
-Give this cluster its own group UUID in `inventories/lab/group_vars/all/main.yml`:
+Give this cluster its own group UUID in `inventories/group_vars/all/main.yml`:
 
 ```bash
 python3 -c 'import uuid; print(uuid.uuid4())'
@@ -47,22 +47,22 @@ python3 -c 'import uuid; print(uuid.uuid4())'
 Create the vault file from the example and fill in your own passwords:
 
 ```bash
-ansible-vault create inventories/lab/group_vars/all/vault.yml
+ansible-vault create inventories/group_vars/all/vault.yml
 ```
 
-Copy the key names from `inventories/lab/group_vars/all/vault.example.yml`. Never paste these passwords into chat or tickets.
+Copy the key names from `inventories/group_vars/all/vault.example.yml`. Never paste these passwords into chat or tickets.
 
 Check reachability, then fail fast on inventory mistakes before anything is installed:
 
 ```bash
-ansible -i inventories/lab/ha-4server.yml all -m ping
-ansible-playbook -i inventories/lab/ha-4server.yml playbooks/preflight.yml --ask-vault-pass
+ansible -i inventories/group-one-proxy.yml all -m ping
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/preflight.yml --ask-vault-pass
 ```
 
 ## 4. Run the playbook
 
 ```bash
-ansible-playbook -i inventories/lab/ha-4server.yml playbooks/ha.yml --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/group-one-proxy.yml --ask-vault-pass
 ```
 
 Do not add `--limit`. Bootstrap needs the full group inventory in one run. The first run takes a while (Percona 8.4, XtraBackup and ProxySQL packages).
@@ -70,7 +70,7 @@ Do not add `--limit`. Bootstrap needs the full group inventory in one run. The f
 ## 5. Verify everything in one command
 
 ```bash
-ansible-playbook -i inventories/lab/ha-4server.yml playbooks/verify.yml --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/verify.yml --ask-vault-pass
 ```
 
 It checks group membership, ProxySQL writer routing, application login through the proxy, backup freshness, binlog archiving and exporters. If it passes, the manual checks below should pass too; they are still worth doing once so you know what healthy looks like.

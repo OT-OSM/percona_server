@@ -1,16 +1,8 @@
 ---
-# Migration inventory: one existing standalone becomes the group seed.
-# The standalone MUST be listed first in gr_members; percona_group_seed
-# defaults to the first member. The two new servers must be fresh Ubuntu
-# 24.04 installs with no MySQL data.
-# Usage: ansible-playbook -i inventories/lab/migrate.yml playbooks/migrate-to-gr.yml --ask-vault-pass
+# 4. Four VMs: three database members + one ProxySQL server. Backups + exporters included; no proxy redundancy.
+# Choose this file only; replace ansible_host addresses with your VM IPs.
 all:
   children:
-    seed:
-      hosts:
-        db1:
-          ansible_host: 192.0.2.11
-          percona_server_id: 101
     database:
       children:
         gr_members:
@@ -28,10 +20,6 @@ all:
       hosts:
         proxy1:
           ansible_host: 192.0.2.21
-          proxysql_ha_priority: 110
-        proxy2:
-          ansible_host: 192.0.2.22
-          proxysql_ha_priority: 100
     backup_sources:
       hosts:
         db3: {}

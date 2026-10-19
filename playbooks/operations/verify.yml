@@ -1,8 +1,22 @@
 ---
-# Post-deploy health check. Run after ha.yml / standalone.yml, or any time
+# Post-deploy health check. Run after group-two-proxies.yml / group-one-proxy.yml / standalone.yml, or any time
 # you want a one-command answer to "is the topology healthy?".
 #
-# ansible-playbook -i inventories/lab/ha.yml playbooks/verify.yml --ask-vault-pass
+# ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/verify.yml --ask-vault-pass
+- name: Verify standalone database
+  hosts: primary
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Confirm standalone MySQL accepts queries
+    community.mysql.mysql_query:
+      login_user: "{{ percona_root_username | default('root') }}"
+      login_password: '{{ percona_root_password }}'
+      login_unix_socket: "{{ percona_socket | default('/var/run/mysqld/mysqld.sock') }}"
+      config_file: ''
+      query: SELECT VERSION(), @@read_only
+    changed_when: false
+    no_log: true
 - name: Verify group membership
   hosts: gr_members
   become: true
@@ -10,9 +24,9 @@
   tasks:
   - name: Read group members from the first node
     community.mysql.mysql_query:
-      login_user: '{{ percona_root_username }}'
+      login_user: "{{ percona_root_username | default('root') }}"
       login_password: '{{ percona_root_password }}'
-      login_unix_socket: '{{ percona_socket }}'
+      login_unix_socket: "{{ percona_socket | default('/var/run/mysqld/mysqld.sock') }}"
       config_file: ''
       query: SELECT MEMBER_HOST, MEMBER_STATE, MEMBER_ROLE FROM performance_schema.replication_group_members
     register: verify_members
@@ -34,7 +48,7 @@
   tasks:
   - name: Read runtime backend servers
     community.mysql.mysql_query:
-      login_user: '{{ proxysql_admin_user }}'
+      login_user: "{{ proxysql_admin_user | default('admin') }}"
       login_password: '{{ proxysql_admin_password }}'
       login_host: 127.0.0.1
       login_port: 6032
@@ -46,14 +60,14 @@
   - name: Require exactly one online writer in the writer hostgroup
     ansible.builtin.assert:
       that:
-      - verify_backends.query_result[0] | selectattr('hostgroup_id', 'equalto', proxysql_writer_hostgroup | int) | selectattr('status', 'equalto', 'ONLINE') | list | length == 1
+      - verify_backends.query_result[0] | selectattr('hostgroup_id', 'equalto', proxysql_writer_hostgroup | default(10) | int) | selectattr('status', 'equalto', 'ONLINE') | list | length == 1
       fail_msg: Writer hostgroup does not hold exactly one online backend. See docs/troubleshooting.md.
   - name: Prove application login through the proxy listener
     community.mysql.mysql_query:
       login_user: '{{ proxysql_users[0].name }}'
       login_password: '{{ proxysql_users[0].password }}'
       login_host: 127.0.0.1
-      login_port: '{{ proxysql_port }}'
+      login_port: '{{ proxysql_port | default(6033) }}'
       config_file: ''
       query: SELECT 1
     changed_when: false
@@ -79,26 +93,26 @@
       fail_msg: No recent complete backup found. Run 'sudo /usr/local/bin/percona-backup backup full' on the backup source.
   - name: List binary logs on the server
     community.mysql.mysql_query:
-      login_user: '{{ percona_root_username }}'
+      login_user: "{{ percona_root_username | default('root') }}"
       login_password: '{{ percona_root_password }}'
-      login_unix_socket: '{{ percona_socket }}'
+      login_unix_socket: "{{ percona_socket | default('/var/run/mysqld/mysqld.sock') }}"
       config_file: ''
       query: SHOW BINARY LOGS
     register: verify_binlog_list
     changed_when: false
     no_log: true
-    when: backup_binlog_archive_enabled | bool
+    when: backup_binlog_archive_enabled | default(true) | bool
   - name: List archived binlogs
     ansible.builtin.command:
-      argv: ['ls', '{{ backup_binlog_path }}']
+      argv: ['ls', "{{ backup_binlog_path | default('/var/backup/binlog') }}"]
     register: verify_archived
     changed_when: false
-    when: backup_binlog_archive_enabled | bool
+    when: backup_binlog_archive_enabled | default(true) | bool
   - name: Require every rotated binlog to be archived
     ansible.builtin.assert:
       that: ((verify_binlog_list.query_result[0] | map(attribute='Log_name') | list)[:-1] | difference(verify_archived.stdout_lines | default([])) | length) == 0
       fail_msg: A rotated binlog is missing from the archive. Check the percona-binlog-ship cron log.
-    when: backup_binlog_archive_enabled | bool
+    when: backup_binlog_archive_enabled | default(true) | bool
 - name: Verify exporters answer
   hosts: monitoring_targets
   become: true
@@ -106,7 +120,7 @@
   tasks:
   - name: Scrape exporter metrics
     ansible.builtin.uri:
-      url: http://127.0.0.1:9104/metrics
+      url: 'http://127.0.0.1:{{ exporter_port | default(9104) }}/metrics'
       return_content: true
     register: verify_metrics
     changed_when: false

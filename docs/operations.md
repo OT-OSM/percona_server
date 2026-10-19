@@ -6,7 +6,7 @@ step says what to check before moving on.
 ## Daily health check
 
 ```bash
-ansible-playbook -i <inventory> playbooks/verify.yml --ask-vault-pass
+ansible-playbook -i <inventory> playbooks/operations/verify.yml --ask-vault-pass
 ```
 
 It checks: group members ONLINE with one PRIMARY, ProxySQL writer hostgroup
@@ -56,7 +56,7 @@ playbooks refuse to force-bootstrap an established group on purpose.
 # 1. Prepare a fresh Ubuntu 24.04 VM with Percona 8.4 installed (playbooks/standalone.yml)
 # 2. Copy the backup chain into its backup_path, or download from MinIO
 # 3. Run the restore playbook
-ansible-playbook -i <inventory> playbooks/restore.yml --ask-vault-pass \
+ansible-playbook -i <inventory> playbooks/operations/restore.yml --ask-vault-pass \
   --limit restore1 \
   -e backup_restore_target=restore1 \
   -e backup_restore_id=<backup-id> \
@@ -89,22 +89,22 @@ mysqlbinlog --stop-datetime="2026-10-19 14:30:00" \
 1. Provision a fresh Ubuntu 24.04 VM; it must have no transactions of its own.
 2. Add it to `gr_members` in the inventory with a unique `percona_server_id`.
 3. Give it the same `percona_group_name`.
-4. Run `playbooks/preflight.yml`, then `playbooks/ha.yml`.
+4. Run `playbooks/operations/preflight.yml`, then `playbooks/group-two-proxies.yml`.
 5. The new node joins as SECONDARY via distributed recovery. Confirm with the
-   member query and `playbooks/verify.yml`.
+   member query and `playbooks/operations/verify.yml`.
 
 ## Remove a member from the group
 
 1. On the member: `STOP GROUP_REPLICATION;`.
 2. Remove it from `gr_members` in the inventory.
-3. Rerun `playbooks/proxysql.yml` so the proxies drop the backend.
+3. Rerun `playbooks/operations/proxysql.yml` so the proxies drop the backend.
 4. The remaining two nodes keep quorum. Do not run a two-node group for long;
    replace the member.
 
 ## Rolling configuration change
 
 ```bash
-ansible-playbook -i <inventory> playbooks/configure.yml --ask-vault-pass
+ansible-playbook -i <inventory> playbooks/operations/configure.yml --ask-vault-pass
 ```
 
 MySQL restarts one node at a time and waits for each to rejoin the group.

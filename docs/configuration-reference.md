@@ -8,7 +8,7 @@ flowchart LR
   R --> N[Wait for rejoin, then next node]
 ```
 
-Edit [shared values](../inventories/lab/group_vars/all/main.yml); use `host_vars/<host>.yml` for node-specific values.
+Edit [shared values](../inventories/group_vars/all/main.yml); use `host_vars/<host>.yml` for node-specific values.
 
 | Variable | Default / purpose |
 |---|---|
@@ -38,7 +38,7 @@ percona_users:
 ```
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/configure.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/configure.yml --ask-vault-pass
 ```
 
 ## Sizing notes

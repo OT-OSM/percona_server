@@ -15,11 +15,11 @@ one-to-three promotion, not a data merge.
 - The standalone runs Percona 8.4 (built by this repo, or meeting the checks below).
 - Two fresh Ubuntu 24.04 servers with no MySQL data.
 - A maintenance window. The seed's MySQL restarts once (1-3 minutes, no writes possible during it).
-- `playbooks/backup.yml` has been run against the standalone before, so `/usr/local/bin/percona-backup` exists there.
+- `playbooks/operations/backup.yml` has been run against the standalone before, so `/usr/local/bin/percona-backup` exists there.
 
 ## What the checks enforce
 
-`playbooks/migrate-to-gr.yml` refuses to start when any of these fail, and
+`playbooks/migrate.yml` refuses to start when any of these fail, and
 tells you exactly what to fix:
 
 - GTID mode is ON and binlog format is ROW.
@@ -36,16 +36,16 @@ before migrating. That step is deliberately not automated.
 ```bash
 # 1. Copy the migration inventory and fill in real IPs.
 #    The standalone MUST be first in gr_members.
-cp inventories/lab/migrate.yml inventories/lab/migrate-prod.yml
+cp inventories/migrate.yml inventories/migrate-prod.yml
 
 # 2. Fresh group UUID for the new group.
 python3 -c 'import uuid; print(uuid.uuid4())'
-# put it in inventories/lab/group_vars/all/main.yml as percona_group_name
+# put it in inventories/group_vars/all/main.yml as percona_group_name
 
 # 3. Preflight, migrate, verify.
-ansible-playbook -i inventories/lab/migrate-prod.yml playbooks/preflight.yml --ask-vault-pass
-ansible-playbook -i inventories/lab/migrate-prod.yml playbooks/migrate-to-gr.yml --ask-vault-pass
-ansible-playbook -i inventories/lab/migrate-prod.yml playbooks/verify.yml --ask-vault-pass
+ansible-playbook -i inventories/migrate-prod.yml playbooks/operations/preflight.yml --ask-vault-pass
+ansible-playbook -i inventories/migrate-prod.yml playbooks/migrate.yml --ask-vault-pass
+ansible-playbook -i inventories/migrate-prod.yml playbooks/operations/verify.yml --ask-vault-pass
 ```
 
 ## What happens, step by step
@@ -59,7 +59,7 @@ ansible-playbook -i inventories/lab/migrate-prod.yml playbooks/verify.yml --ask-
 
 ## After migration
 
-- Switch daily operations to the `ha.yml` inventory layout (same hosts, `backup_sources` on a secondary).
+- Switch daily operations to the `group-two-proxies.yml` inventory layout (same hosts, `backup_sources` on a secondary).
 - Run the failover drill from `docs/operations.md` before calling it production.
 - The pre-migration full backup stays on the seed; keep it until the first post-migration backup succeeds.
 
@@ -67,5 +67,5 @@ ansible-playbook -i inventories/lab/migrate-prod.yml playbooks/verify.yml --ask-
 
 If the migration fails before bootstrap, the seed is still a standalone with
 its original data plus a new my.cnf. Restore the pre-migration backup to a
-fresh VM with `playbooks/restore.yml` and repoint the application. The
+fresh VM with `playbooks/operations/restore.yml` and repoint the application. The
 automatic safety backup from step 2 is the rollback source.

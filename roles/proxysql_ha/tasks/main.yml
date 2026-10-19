@@ -1,6 +1,6 @@
 ---
 - name: Configure proxy virtual IP
-  when: proxysql_ha_enabled | bool
+  when: groups.get('proxies', []) | length > 1 and proxysql_ha_enabled | bool
   block:
   - name: Install Keepalived
     ansible.builtin.apt:

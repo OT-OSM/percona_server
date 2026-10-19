@@ -11,7 +11,7 @@ flowchart LR
 The role installs exporters and enables Group Replication collectors. Prometheus, Grafana and Alertmanager remain outside this repository's deployment.
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/monitoring.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/monitoring.yml --ask-vault-pass
 curl http://192.0.2.11:9104/metrics
 ```
 
@@ -34,4 +34,4 @@ Key metrics to watch:
 | `mysql_perf_schema_replication_group_member_info` | One series per known member, with `member_state` and `member_role` labels. |
 | `mysql_perf_schema_transactions_in_queue` | Transactions waiting in a member's applier queue; sustained growth means lag. |
 
-Alert delivery and Grafana dashboards must be connected in your monitoring platform. No dashboard is automatically installed in this basic setup. Backup freshness is checked by `playbooks/verify.yml` (a backup newer than 30 hours); wire its failure into your alerting if backups are part of your SLA.
+Alert delivery and Grafana dashboards must be connected in your monitoring platform. No dashboard is automatically installed in this basic setup. Backup freshness is checked by `playbooks/operations/verify.yml` (a backup newer than 30 hours); wire its failure into your alerting if backups are part of your SLA.

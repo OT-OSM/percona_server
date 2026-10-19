@@ -22,6 +22,6 @@
       name: percona_server
       tasks_from: applications
     run_once: true
-- import_playbook: proxysql.yml
-- import_playbook: backup.yml
-- import_playbook: monitoring.yml
+- import_playbook: operations/proxysql.yml
+- import_playbook: operations/backup.yml
+- import_playbook: operations/monitoring.yml

@@ -15,7 +15,7 @@ percona_innodb_buffer_pool_size: 2G
 ```
 
 ```bash
-ansible-playbook -i inventories/lab/hosts.yml playbooks/standalone.yml --ask-vault-pass
+ansible-playbook -i inventories/standalone.yml playbooks/standalone.yml --ask-vault-pass
 ```
 
 [Defaults](defaults/main.yml) · [Tasks](tasks/main.yml) · [Project setup](../../README.md)

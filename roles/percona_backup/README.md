@@ -18,7 +18,7 @@ backup_binlog_archive_enabled: true
 ```
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/backup.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/backup.yml --ask-vault-pass
 ```
 
 Manual commands on the backup source:

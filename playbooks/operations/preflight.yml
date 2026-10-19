@@ -3,7 +3,7 @@
 # most time: wrong OS, placeholder values left in the inventory, duplicate
 # server ids, unreachable peers, missing vault secrets.
 #
-# ansible-playbook -i inventories/lab/ha.yml playbooks/preflight.yml --ask-vault-pass
+# ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/preflight.yml --ask-vault-pass
 - name: Check target servers
   hosts: all
   become: true
@@ -31,7 +31,7 @@
       that:
       - percona_root_password | length > 0
       - percona_group_password | length > 0
-      fail_msg: Fill inventories/lab/group_vars/all/vault.yml from vault.example.yml first.
+      fail_msg: Fill inventories/group_vars/all/vault.yml from vault.example.yml first.
     no_log: true
     when: "'gr_members' in group_names or 'primary' in group_names"
 - name: Check group identity
@@ -70,7 +70,7 @@
       that:
       - proxysql_admin_password | length > 0
       - proxysql_monitor_password | length > 0
-      fail_msg: Fill the proxysql vault keys in inventories/lab/group_vars/all/vault.yml first.
+      fail_msg: Fill the proxysql vault keys in inventories/group_vars/all/vault.yml first.
     no_log: true
   - name: Require database targets to exist
     ansible.builtin.assert:

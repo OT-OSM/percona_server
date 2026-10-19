@@ -8,12 +8,12 @@ flowchart LR
   D --> E[View metrics and take backup]
 ```
 
-1. Prepare fresh Ubuntu 24.04 amd64 VMs and edit [HA inventory](../inventories/lab/ha.yml).
-2. Fill the existing Vault keys from [the example](../inventories/lab/group_vars/all/vault.example.yml).
+1. Prepare fresh Ubuntu 24.04 amd64 VMs and edit [HA inventory](../inventories/group-two-proxies.yml).
+2. Fill the existing Vault keys from [the example](../inventories/group_vars/all/vault.example.yml).
 3. Run the setup:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml --ask-vault-pass
 ```
 
 4. On a database VM, open `mysql -u root -p`:
@@ -41,8 +41,8 @@ Application tables need primary keys for Group Replication.
 
 6. See exporter metrics: `curl http://<db-ip>:9104/metrics`.
 7. On db3, run `sudo /usr/local/bin/percona-backup backup full`.
-8. Optionally enable the proxy VIP in [proxy settings](../inventories/lab/group_vars/proxies.yml), then run `playbooks/proxysql.yml` with the same inventory.
+8. Optionally enable the proxy VIP in [proxy settings](../inventories/group_vars/proxies.yml), then run `playbooks/operations/proxysql.yml` with the same inventory.
 
-To start with one VM instead, use `playbooks/standalone.yml` and `inventories/lab/hosts.yml`. Do not run the HA play with `--limit`: bootstrap needs the full group inventory.
+To start with one VM instead, use `playbooks/standalone.yml` and `inventories/standalone.yml`. Do not run the HA play with `--limit`: bootstrap needs the full group inventory.
 
 Stopping the current writer can demonstrate election in a disposable lab, but active connections may fail and need reconnecting. Full outage recovery and failure acceptance are a later phase.

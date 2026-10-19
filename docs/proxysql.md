@@ -21,11 +21,11 @@ ProxySQL 3.0.1 uses its native Group Replication monitor. No legacy sys view is 
 All application traffic starts on hostgroup 10. Read routing is opt-in using `proxysql_query_rules`; this setup does not send every SELECT to a secondary.
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/proxysql.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/proxysql.yml --ask-vault-pass
 mysql -h <proxy-ip-or-vip> -P 6033 -u appuser -p appdb
 ```
 
-VIP configuration lives in [proxy variables](../inventories/lab/group_vars/proxies.yml). Use two proxies, an unused VIP, the actual NIC name, and a network that permits VRRP and VIP movement. With no VIP, both proxy addresses work independently; clients need their own endpoint failover.
+VIP configuration lives in [proxy variables](../inventories/group_vars/proxies.yml). Use two proxies, an unused VIP, the actual NIC name, and a network that permits VRRP and VIP movement. With no VIP, both proxy addresses work independently; clients need their own endpoint failover.
 
 Local admin inspection:
 

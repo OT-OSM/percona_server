@@ -51,7 +51,7 @@ record the answers next to the inventory.
 
 ## Acceptance walkthrough: deployment → rerun → failover → restore
 
-Run this on dedicated staging VMs before the client production rollout. The failover steps deliberately stop services. Use your own inventory and addresses below; commands assume a repository checkout. Galaxy users can replace `playbooks/ha.yml` with `opstree.percona.ha` (and similarly for the other playbooks).
+Run this on dedicated staging VMs before the client production rollout. The failover steps deliberately stop services. Use your own inventory and addresses below; commands assume a repository checkout. Galaxy users can replace `playbooks/group-two-proxies.yml` with `opstree.percona.group-two-proxies` ; for operations, use names such as `opstree.percona.operations.verify`.
 
 ```mermaid
 flowchart LR
@@ -67,8 +67,8 @@ Fill the inventory and Vault credentials first. Use three database VMs, two prox
 
 ```bash
 # Controller
-ansible-playbook -i inventories/lab/ha.yml playbooks/preflight.yml --ask-vault-pass
-ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/preflight.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml --ask-vault-pass
 ```
 
 On any database VM, open `mysql -u root -p`:
@@ -110,7 +110,7 @@ Record the returned backup ID. A fresh backup is needed before the verification 
 
 ```bash
 # Controller
-ansible-playbook -i inventories/lab/ha.yml playbooks/verify.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/verify.yml --ask-vault-pass
 ```
 
 **Pass:** verification succeeds, the proxy accepts application queries, and the backup is complete. Also confirm the nodes appear in the client's monitoring platform and an alert reaches its intended recipient.
@@ -126,8 +126,8 @@ systemctl show mysql -p ActiveEnterTimestamp
 Rerun the same deployment from the controller:
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/ha.yml --ask-vault-pass
-ansible-playbook -i inventories/lab/ha.yml playbooks/verify.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml --ask-vault-pass
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/verify.yml --ask-vault-pass
 ```
 
 **Pass:** all members remain healthy, server UUIDs and row 1 remain unchanged, and MySQL service start times have not changed. Package/cache or scheduling tasks may report changes; inspect the reasons rather than requiring the entire recap to say `changed=0`.
@@ -167,7 +167,7 @@ On the stopped VM:
 sudo systemctl start mysql
 ```
 
-Wait for all three members to be ONLINE, then run `playbooks/verify.yml` again. Do not run the full verification play while its first database host is stopped. A service-stop drill does not prove network-partition or sudden-power-loss behavior; record those as separate untested scenarios unless exercised.
+Wait for all three members to be ONLINE, then run `playbooks/operations/verify.yml` again. Do not run the full verification play while its first database host is stopped. A service-stop drill does not prove network-partition or sudden-power-loss behavior; record those as separate untested scenarios unless exercised.
 
 ### 4. Test the proxy endpoint
 
@@ -200,7 +200,7 @@ Copy the recorded backup directory, including `data/`, `manifest.json` and `_SUC
 
 ```bash
 # Controller: substitute the real backup ID; use a new workspace each attempt.
-ansible-playbook -i inventories/lab/ha.yml playbooks/restore.yml --ask-vault-pass \
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/restore.yml --ask-vault-pass \
   --limit restore1 -e backup_restore_target=restore1 \
   -e backup_restore_id=YOUR_BACKUP_ID \
   -e backup_restore_workdir=/var/tmp/acceptance-restore-1

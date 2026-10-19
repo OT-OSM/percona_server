@@ -64,14 +64,14 @@ backup_mc_url: '<mc download URL>'
 backup_mc_checksum: 'sha256:<checksum>'
 ```
 
-Run `playbooks/backup.yml` with your selected inventory. This does not install a MinIO server.
+Run `playbooks/operations/backup.yml` with your selected inventory. This does not install a MinIO server.
 
 ## Explicit restore
 
 Prepare a separate standalone 8.4 VM and list it under `restore_targets`, outside `database`. Copy the complete backup chain into its `backup_path` first; MinIO download is manual in this version. Install Percona 8.4 on the target before restore.
 
 ```bash
-ansible-playbook -i inventories/lab/ha.yml playbooks/restore.yml --ask-vault-pass   --limit restore1 -e backup_restore_target=restore1   -e backup_restore_id=<backup-id> -e backup_restore_workdir=/var/tmp/restore-run1
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/restore.yml --ask-vault-pass   --limit restore1 -e backup_restore_target=restore1   -e backup_restore_id=<backup-id> -e backup_restore_workdir=/var/tmp/restore-run1
 ```
 
 Restore preserves the target's previous datadir, prepares a working copy and starts the restored database read-only. Use the **root password stored in the backup** when the restored server starts; keep source and target credentials identical for this simple workflow. It does not join the target to the group or promote it.
