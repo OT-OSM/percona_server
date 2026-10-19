@@ -43,6 +43,6 @@ Application tables need primary keys for Group Replication.
 7. On db3, run `sudo /usr/local/bin/percona-backup backup full`.
 8. Optionally enable the proxy VIP in [proxy settings](../inventories/group_vars/proxies.yml), then run `playbooks/operations/proxysql.yml` with the same inventory.
 
-To start with one VM instead, use `playbooks/standalone.yml` and `inventories/standalone.yml`. Do not run the HA play with `--limit`: bootstrap needs the full group inventory.
+Do not run the group play with `--limit`: bootstrap needs the full group inventory.
 
 Stopping the current writer can demonstrate election in a disposable lab, but active connections may fail and need reconnecting. Full outage recovery and failure acceptance are a later phase.

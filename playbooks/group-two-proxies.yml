@@ -1,4 +1,7 @@
 ---
+# Topology 2: three database nodes + two ProxySQL nodes.
+# Use with inventories/group-two-proxies.yml.
+# This is also the shared workflow imported by group-one-proxy.yml.
 - name: Prepare Percona 8.4 database nodes
   hosts: gr_members
   become: true

@@ -21,12 +21,15 @@ ansible-galaxy collection install -r requirements.yml
 
 ## 2. Pick one setup
 
-Open [the four-setup runbook](deployment-runbook.md) and choose one row. Edit only its inventory file, replacing example `ansible_host` IP addresses. Group labels select jobs; they are not extra VMs.
+Open [the deployment runbook](deployment-runbook.md) and choose one of the
+two topologies. Edit only its inventory file, replacing example
+`ansible_host` IP addresses. Group labels select jobs; they are not extra
+VMs.
 
-For example, for one standalone VM:
+For example, with the one-proxy inventory:
 
 ```bash
-ansible -i inventories/standalone.yml all -m ping
+ansible -i inventories/group-one-proxy.yml all -m ping
 ```
 
 Expect `pong`. Fix SSH/IP problems before deploying. Use the matching inventory file for your chosen setup in every later command.

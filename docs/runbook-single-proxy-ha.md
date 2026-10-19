@@ -44,7 +44,7 @@ Restrict database, exporter, and admin access to the required hosts/networks; do
 
 ## 2. Set inventory and credentials
 
-Edit `inventories/group-two-proxies.yml` and replace the example addresses for `db1`, `db2`, `db3`, and `proxy1`. Assign a unique `percona_server_id` to each database node. The inventory already assigns `db3` as the backup source and all three database nodes as monitoring targets.
+Edit `inventories/group-one-proxy.yml` and replace the example addresses for `db1`, `db2`, `db3`, and `proxy1`. Assign a unique `percona_server_id` to each database node. The inventory already assigns `db3` as the backup source and all three database nodes as monitoring targets.
 
 Set a fresh Group Replication UUID in `inventories/group_vars/all/main.yml`:
 
@@ -67,25 +67,22 @@ The sample inventory enables daily local full backups. MinIO is not enabled by d
 Review the hosts Ansible will target:
 
 ```bash
-ansible-inventory -i inventories/group-two-proxies.yml --graph --ask-vault-pass
+ansible-inventory -i inventories/group-one-proxy.yml --graph --ask-vault-pass
 ```
 
-The one-proxy deployment uses a limit to omit `proxy2`, but **includes every Group Replication member**. If you rename the hosts, update the limit accordingly:
+Syntax-check the playbook against the same inventory:
 
 ```bash
-ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml \
-  --limit 'db1,db2,db3,proxy1' --syntax-check --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/group-one-proxy.yml \
+  --syntax-check --ask-vault-pass
 ```
-
-Do not use a limit that omits any of `db1`, `db2`, or `db3`; the group setup must see all three members.
 
 ## 4. Deploy the stack
 
-Run the complete deployment. The limit keeps the database group intact while deploying only `proxy1` from the proxy group:
+Run the complete deployment with the one-proxy inventory:
 
 ```bash
-ansible-playbook -i inventories/group-two-proxies.yml playbooks/group-two-proxies.yml \
-  --limit 'db1,db2,db3,proxy1' --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/group-one-proxy.yml --ask-vault-pass
 ```
 
 The playbook installs/configures the three database nodes one at a time, forms Group Replication, creates the application database on the elected writer, configures ProxySQL on `proxy1`, configures backups on `db3`, and installs exporters on all three database nodes. First deployment requires fresh nodes and package repository/download access. Review Ansible output; do not ignore a failed group member or continue with only part of the database group.
@@ -142,14 +139,13 @@ Add the three exporter endpoints to an existing Prometheus scrape configuration;
 After changing database settings, apply them one node at a time:
 
 ```bash
-ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/configure.yml --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/configure.yml --ask-vault-pass
 ```
 
-To reconfigure only the selected proxy, include the limit:
+To reconfigure only the proxy:
 
 ```bash
-ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/proxysql.yml \
-  --limit proxy1 --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/proxysql.yml --ask-vault-pass
 ```
 
 ## Lab safety

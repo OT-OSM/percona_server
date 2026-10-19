@@ -1,134 +1,164 @@
-# Percona 8.4 LTS — choose one of four setups
+# Percona 8.4 Group Replication on Ubuntu
 
-Ansible setup for Ubuntu 24.04 amd64. Each deployment includes **backup setup and MySQL monitoring exporters**. Connect exporters to your existing Prometheus/Grafana.
+Ansible automation that deploys a production-style MySQL high-availability
+stack: three Percona Server 8.4 nodes in single-primary Group Replication,
+fronted by ProxySQL, with XtraBackup-based backups and Prometheus exporters
+included. Ubuntu 24.04 amd64 throughout.
 
-| Choice | Inventory | Deployment playbook |
+## The two topologies
+
+| | One ProxySQL | Two ProxySQL |
 |---|---|---|
-| **1. Standalone** — one database | `inventories/standalone.yml` | `playbooks/standalone.yml` |
-| **2. Group + two ProxySQL** — three databases, two proxies | `inventories/group-two-proxies.yml` | `playbooks/group-two-proxies.yml` |
-| **3. Migrate standalone → group** — reuse db1, add two databases and two proxies | `inventories/migrate.yml` | `playbooks/migrate.yml` |
-| **4. Group + one ProxySQL** — three databases, one proxy | `inventories/group-one-proxy.yml` | `playbooks/group-one-proxy.yml` |
+| Inventory | `inventories/group-one-proxy.yml` | `inventories/group-two-proxies.yml` |
+| Playbook | `playbooks/group-one-proxy.yml` | `playbooks/group-two-proxies.yml` |
+| Servers | 3 database + 1 proxy | 3 database + 2 proxy |
+| Client endpoint | Proxy IP, port 6033 | VIP or load balancer, port 6033 |
+| Proxy redundancy | No | Yes, with keepalived VIP |
 
-**Pick one row, not all four.** The inventory lists VMs; Ansible installs services on those VMs, it does not create them.
+Both run the same deployment workflow; the inventory selects the topology.
+Database failover is automatic in both: if the writer fails, the group elects
+a new one and ProxySQL follows it.
 
 ```mermaid
 flowchart LR
-  A[Choose your setup] --> S[Standalone: 1 database]
-  A --> G[Group: 3 databases]
-  G --> P2[2 ProxySQL: optional shared VIP]
-  G --> P1[1 ProxySQL: one endpoint]
-  S --> M[Migrate later to a group]
-  S --> B[Backups + exporters]
-  G --> B
+  A[Application] --> P[ProxySQL: writer tracking]
+  P --> G[3x Percona 8.4: one writer, two replicas]
+  G --> B[Backups on db3 + binlog archive]
+  G --> E[Exporter on every node]
 ```
 
-## Start in three steps
+## Deploy in four steps
 
-1. **Choose inventory:** replace the example IPs in your selected file. [Inventory explanation](inventories/README.md).
-2. **Set values:** edit `inventories/group_vars/all/main.yml`; create or edit encrypted `inventories/group_vars/all/vault.yml` using the keys in `vault.example.yml`. For a new group, generate one UUID and set `percona_group_name`.
-3. **Run your setup:** use the matching command in the [four-setup runbook](docs/deployment-runbook.md).
+The controller needs Ansible Core 2.16+. Target VMs need SSH, sudo and
+package download access. Ansible installs services on your VMs; it does not
+create them.
 
-The controller needs Ansible Core 2.16+; VMs need SSH, sudo and package download access. Install dependencies once:
+**1. Install dependencies** (once):
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
 
-First time using Ansible? Read [the short beginner guide](docs/beginner-guide.md).
+**2. Describe your servers.** Edit one inventory file and replace the example
+IPs with your VM IPs. See [how inventories work](inventories/README.md).
 
-## Verify or change settings later
-
-Keep using the **same inventory** you deployed. Example for standalone:
+**3. Set secrets and the group ID.** Edit `inventories/group_vars/all/main.yml`.
+Create the encrypted vault file from the example key list, and generate one
+UUID for the group:
 
 ```bash
-# After taking the first backup, check the setup:
-ansible-playbook -i inventories/standalone.yml playbooks/operations/verify.yml --ask-vault-pass
-
-# Edit settings in group_vars/all/main.yml, then apply them:
-ansible-playbook -i inventories/standalone.yml playbooks/operations/configure.yml --ask-vault-pass
+ansible-vault create inventories/group_vars/all/vault.yml
+python3 -c 'import uuid; print(uuid.uuid4())'   # put this in percona_group_name
 ```
 
-For a group, replace only the inventory with `inventories/group-two-proxies.yml` or `inventories/group-one-proxy.yml`.
+**4. Check, deploy, verify** (same inventory every time):
 
-Configuration changes currently restart affected MySQL nodes, one at a time. Unchanged configuration does not restart MySQL. [Configuration guide](docs/configuration-reference.md).
+```bash
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/preflight.yml --ask-vault-pass
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/group-one-proxy.yml --ask-vault-pass
+# take the first full backup on db3, then:
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/verify.yml --ask-vault-pass
+```
 
-## What to expect
+New to Ansible? Start with [the beginner guide](docs/beginner-guide.md).
 
-- Data and binlogs use `/var/lib/mysql`.
-- Standalone has no database failover. Groups elect one writer automatically.
-- One proxy has no proxy redundancy. For two proxies, configure the VIP or your existing load balancer to provide one stable endpoint.
-- Monitoring servers are external. Backup schedules are installed, but take the first backup before verification.
-- Migration is Percona **8.4 standalone to Group Replication**, not an 8.0 upgrade. Read [migration prerequisites](docs/migrate-standalone-to-gr.md) first.
-- Run the [acceptance walkthrough](docs/production-checklist.md#acceptance-walkthrough-deployment--rerun--failover--restore) before claiming production validation.
+## What you get
 
-## Reference
+- **One writer, always.** Single-primary Group Replication with GTID and row
+  binlogs. Writes go to the elected primary; replicas stay read-only.
+- **Automatic failover.** The group detects a dead writer in about 10
+  seconds, elects a new one, and ProxySQL moves traffic to it. Expect roughly
+  15-30 seconds of write outage on a hard crash; in-flight writes fail fast
+  and the application retries.
+- **Safe reads after failover.** `group_replication_consistency =
+  BEFORE_ON_PRIMARY_FAILOVER` prevents stale reads from a freshly elected
+  writer.
+- **Backups with point-in-time recovery.** Daily full XtraBackup on db3, a
+  7-day retention policy that always keeps the newest chain, and binlog
+  archiving every 5 minutes for replay to any point in time.
+- **Monitoring ready.** `mysqld_exporter` on every database node with alert
+  rules for group health; point your Prometheus at port 9104.
+- **Guarded operations.** Preflight checks fail fast on wrong OS, duplicate
+  server IDs, placeholder secrets and unreachable peers. Every destructive
+  step (bootstrap, restore target selection) asserts before acting.
 
-[Architecture](docs/architecture.md) · [Backups and restore](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md) · [Operations](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md)
+## Later: change settings, verify health
 
-Six reusable roles power these four setups: `percona_server`, `percona_group_replication`, `proxysql`, `proxysql_ha`, `percona_backup`, `mysql_exporter`. You normally run the deployment playbooks, not individual roles.
+```bash
+# Apply configuration changes, one node at a time:
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/configure.yml --ask-vault-pass
+
+# One-command health check, any time:
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/verify.yml --ask-vault-pass
+```
+
+Configuration changes restart the affected MySQL node; unchanged nodes are
+untouched. See the [configuration guide](docs/configuration-reference.md)
+and the [operations runbook](docs/operations.md).
+
+## What this is not
+
+- Not cross-site disaster recovery. This is local high availability; the
+  off-site copy is your backup plus archived binlogs.
+- Not a managed database. You own the VMs, the OS patching and the
+  Prometheus/Grafana side.
+- Not validated until you validate it. Complete the [acceptance
+  walkthrough](docs/production-checklist.md) (deployment, rerun, failover
+  drill, restore test) before presenting it as production-ready.
+
+## Documentation
+
+[Deployment runbook](docs/deployment-runbook.md) ·
+[Architecture](docs/architecture.md) ·
+[Configuration](docs/configuration-reference.md) ·
+[Backups and restore](docs/backup-and-restore.md) ·
+[Monitoring](docs/monitoring.md) ·
+[Operations](docs/operations.md) ·
+[Troubleshooting](docs/troubleshooting.md) ·
+[Beginner guide](docs/beginner-guide.md) ·
+[4-server lab](LOCAL-RUN.md)
+
+Six roles do the work: `percona_server`, `percona_group_replication`,
+`proxysql`, `proxysql_ha`, `percona_backup`, `mysql_exporter`. Run the
+playbooks, not the roles directly.
 
 ## Use as an Ansible Galaxy collection
 
-Collection: `opstree.percona`. Requires **Ansible Core 2.16+**. Collection dependencies install automatically.
+Published as `opstree.percona` (Ansible Core 2.16+).
 
 ```bash
-# After publication to Galaxy
 ansible-galaxy collection install opstree.percona
 ```
 
-For a standalone server, create `inventory.ini` with your VM address:
-
-```ini
-[primary]
-db1 ansible_host=192.0.2.11 ansible_user=ubuntu
-```
-
-Create `deploy.yml`:
-
 ```yaml
----
-- name: Install standalone Percona 8.4
-  hosts: primary
-  become: true
-  vars_prompt:
-  - name: percona_root_password
-    prompt: MySQL root password
-    private: true
-  vars:
-    percona_server_id: 101
-    percona_bind_address: '{{ ansible_host }}'
+# In your own playbook
+- hosts: gr_members
   roles:
-  - opstree.percona.percona_server
+    - opstree.percona.percona_server
+    - opstree.percona.percona_group_replication
 ```
 
-```bash
-ansible-playbook -i inventory.ini deploy.yml
-```
-
-Use the same root password on reruns. For unattended use, put it in encrypted inventory variables instead of using `vars_prompt`. This example installs the server only; the complete deployment includes backups and monitoring.
-
-For the complete standalone or HA setup, copy the [example inventory directory](inventories) into your project, replace the IPs, and create your own `group_vars/all/vault.yml` using [vault.example.yml](inventories/group_vars/all/vault.example.yml). The real Vault file is never distributed in the collection.
+Or run the shipped playbooks from the collection:
 
 ```bash
-ansible-playbook -i inventories/standalone.yml opstree.percona.standalone --ask-vault-pass
-# Or three database nodes and two proxies:
+ansible-galaxy collection install opstree.percona
 ansible-playbook -i inventories/group-two-proxies.yml opstree.percona.group-two-proxies --ask-vault-pass
 ```
 
-The group names `primary` (standalone) and `gr_members` (HA) are part of the inventory interface. Use `database`, `proxies`, `backup_sources` and `monitoring_targets` as shown in the examples.
+The inventory groups (`gr_members`, `proxies`, `backup_sources`,
+`monitoring_targets`, `restore_targets`) are the interface. Copy the
+[example inventories](inventories) into your project, replace the IPs, and
+create your own `vault.yml` from
+[inventories/group_vars/all/vault.example.yml](inventories/group_vars/all/vault.example.yml).
 
 ### Maintainer release
 
 ```bash
 ansible-galaxy collection build --output-path dist
-# Test the built package locally before publishing:
-ansible-galaxy collection install dist/opstree-percona-1.0.0.tar.gz
-```
-
-Publishing requires access to the `opstree` Galaxy namespace. After reviewing the archive contents and completing the VM acceptance run:
-
-```bash
+ansible-galaxy collection install dist/opstree-percona-1.0.0.tar.gz   # test locally first
 ansible-galaxy collection publish dist/opstree-percona-1.0.0.tar.gz --api-key "$GALAXY_API_KEY"
 ```
 
-Local build, installation and syntax checks do not establish production readiness. Follow the [acceptance walkthrough: deployment, rerun, failover and restore](docs/production-checklist.md#acceptance-walkthrough-deployment--rerun--failover--restore), which includes commands, pass criteria and a results table. Complete it before presenting this version as production-validated. Nothing is published automatically.
+Publishing needs access to the `opstree` Galaxy namespace. Complete the
+[acceptance walkthrough](docs/production-checklist.md) before publishing a
+release you call production-ready.

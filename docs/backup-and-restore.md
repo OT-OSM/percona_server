@@ -9,7 +9,7 @@ flowchart LR
   P --> T[Separate restore target]
 ```
 
-The lab inventory schedules a full backup daily at 01:00 on the source VM's timezone. HA uses db3; standalone uses db1. Incrementals are optional. Backups retain local staging even with MinIO.
+The inventory schedules a full backup daily at 01:00 on the source VM's timezone, running on db3 (a replica, never the writer). Incrementals are optional. Backups retain local staging even with MinIO.
 
 ```bash
 # Run on the selected backup VM

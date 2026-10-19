@@ -1,8 +1,0 @@
----
-- name: Set up standalone Percona 8.4
-  hosts: primary
-  become: true
-  roles:
-  - percona_server
-- import_playbook: operations/backup.yml
-- import_playbook: operations/monitoring.yml

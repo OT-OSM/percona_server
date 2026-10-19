@@ -1,22 +1,9 @@
 ---
-# Post-deploy health check. Run after group-two-proxies.yml / group-one-proxy.yml / standalone.yml, or any time
-# you want a one-command answer to "is the topology healthy?".
+# Post-deploy health check. One command that answers "is the group healthy?".
+# Run after playbooks/group-one-proxy.yml or playbooks/group-two-proxies.yml,
+# or any time, with the same inventory you deployed with.
 #
 # ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/verify.yml --ask-vault-pass
-- name: Verify standalone database
-  hosts: primary
-  become: true
-  gather_facts: false
-  tasks:
-  - name: Confirm standalone MySQL accepts queries
-    community.mysql.mysql_query:
-      login_user: "{{ percona_root_username | default('root') }}"
-      login_password: '{{ percona_root_password }}'
-      login_unix_socket: "{{ percona_socket | default('/var/run/mysqld/mysqld.sock') }}"
-      config_file: ''
-      query: SELECT VERSION(), @@read_only
-    changed_when: false
-    no_log: true
 - name: Verify group membership
   hosts: gr_members
   become: true
@@ -108,10 +95,14 @@
     register: verify_archived
     changed_when: false
     when: backup_binlog_archive_enabled | default(true) | bool
+  - name: Find rotated binlogs missing from the archive
+    ansible.builtin.set_fact:
+      verify_missing_binlogs: "{{ ((verify_binlog_list.query_result[0] | map(attribute='Log_name') | list)[:-1] | difference(verify_archived.stdout_lines | default([]))) }}"
+    when: backup_binlog_archive_enabled | default(true) | bool
   - name: Require every rotated binlog to be archived
     ansible.builtin.assert:
-      that: ((verify_binlog_list.query_result[0] | map(attribute='Log_name') | list)[:-1] | difference(verify_archived.stdout_lines | default([])) | length) == 0
-      fail_msg: A rotated binlog is missing from the archive. Check the percona-binlog-ship cron log.
+      that: verify_missing_binlogs | length == 0
+      fail_msg: "These rotated binlogs are missing from the archive: {{ verify_missing_binlogs }}. Check the percona-binlog-ship cron log."
     when: backup_binlog_archive_enabled | default(true) | bool
 - name: Verify exporters answer
   hosts: monitoring_targets

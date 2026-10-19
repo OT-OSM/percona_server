@@ -13,8 +13,8 @@ log-replica-updates = ON
 binlog-expire-logs-seconds = {{ percona_binlog_expire_logs_seconds }}
 gtid-mode = {{ 'ON' if percona_gtid_mode | bool else 'OFF' }}
 enforce-gtid-consistency = {{ 'ON' if percona_gtid_mode | bool else 'OFF' }}
-read-only = {{ 'ON' if percona_topology == 'group_replication' or percona_read_only | bool else 'OFF' }}
-super-read-only = {{ 'ON' if percona_topology == 'group_replication' or percona_read_only | bool else 'OFF' }}
+read-only = ON
+super-read-only = ON
 relay-log = relay-bin
 relay-log-recovery = ON
 skip-name-resolve = ON
@@ -34,7 +34,6 @@ ssl-cert = {{ percona_tls_cert }}
 ssl-key = {{ percona_tls_key }}
 {% endif %}
 
-{% if percona_topology == 'group_replication' %}
 plugin-load-add = group_replication.so
 report-host = {{ percona_address }}
 group-replication-group-name = {{ percona_group_name }}
@@ -50,5 +49,4 @@ group-replication-recovery-get-public-key = ON
 group-replication-consistency = BEFORE_ON_PRIMARY_FAILOVER
 {% if percona_gr_ssl | bool %}
 group-replication-ssl-mode = REQUIRED
-{% endif %}
 {% endif %}

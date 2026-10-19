@@ -53,7 +53,7 @@ playbooks refuse to force-bootstrap an established group on purpose.
 ## Restore a backup to an isolated VM
 
 ```bash
-# 1. Prepare a fresh Ubuntu 24.04 VM with Percona 8.4 installed (playbooks/standalone.yml)
+# 1. Prepare a fresh Ubuntu 24.04 VM with Percona 8.4 installed (use the percona_server role on a host outside the group)
 # 2. Copy the backup chain into its backup_path, or download from MinIO
 # 3. Run the restore playbook
 ansible-playbook -i <inventory> playbooks/operations/restore.yml --ask-vault-pass \
@@ -108,7 +108,7 @@ ansible-playbook -i <inventory> playbooks/operations/configure.yml --ask-vault-p
 ```
 
 MySQL restarts one node at a time and waits for each to rejoin the group.
-Standalone nodes restart with a short outage. Some settings (for example
+Some settings (for example
 `group-replication-ssl-mode`) need a group restart to take effect; the
 playbook restarts MySQL, which restarts Group Replication with it.
 

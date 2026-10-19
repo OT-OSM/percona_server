@@ -36,7 +36,6 @@
   ansible.builtin.stat:
     path: /var/lib/mysql/.ansible-gr-created
   register: configured_gr_marker
-  when: percona_topology == 'group_replication'
 - name: Wait for the restarted group member before moving to the next server
   community.mysql.mysql_query:
     login_user: '{{ percona_root_username }}'
@@ -50,4 +49,4 @@
   delay: 5
   changed_when: false
   no_log: true
-  when: percona_topology == 'group_replication' and configured_gr_marker.stat.exists and percona_config_render.changed
+  when: configured_gr_marker.stat.exists and percona_config_render.changed

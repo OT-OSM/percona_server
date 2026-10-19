@@ -6,6 +6,3 @@
   ansible.builtin.import_tasks: bootstrap.yml
 - name: Configure MySQL
   ansible.builtin.import_tasks: configure.yml
-- name: Create standalone databases and users
-  ansible.builtin.import_tasks: applications.yml
-  when: percona_topology == 'standalone'

@@ -12,7 +12,6 @@ percona_bootstrap_password: ''
 percona_server_id: 1
 percona_bind_address: 127.0.0.1
 percona_config_file: /etc/mysql/mysql.conf.d/mysqld.cnf
-percona_read_only: false
 percona_gtid_mode: true
 percona_binlog_expire_logs_seconds: 604800
 # Auto-size the shared InnoDB cache, leaving room for the OS, connections and backups.
@@ -65,8 +64,7 @@ percona_tls_cert: ''
 percona_tls_key: ''
 percona_require_secure_transport: false
 
-# Group membership comes from the selected inventory.
-percona_topology: "{{ 'group_replication' if groups.get('gr_members', []) | length else 'standalone' }}"
+# Every member of the selected inventory joins the same group.
 percona_group_name: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 percona_group_port: 33061
 percona_group_seed: "{{ groups.get('gr_members', ['db1']) | first }}"

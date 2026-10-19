@@ -187,7 +187,7 @@ sudo systemctl start proxysql
 
 ### 5. Restore the recorded backup
 
-Use a **separate, disposable Percona 8.4 VM**, with default `/var/lib/mysql`, no application traffic and the same root credential as the backup. Install it using a separate standalone inventory first. Then add it under `restore_targets` in the HA inventory; it must not also be under `database`.
+Use a **separate, disposable Percona 8.4 VM**, with default `/var/lib/mysql`, no application traffic and the same root credential as the backup. Install Percona 8.4 on it first (a minimal playbook with the `percona_server` role is enough). Then add it under `restore_targets` in the inventory; it must not also be under `database`.
 
 ```yaml
 restore_targets:
