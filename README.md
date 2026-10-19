@@ -86,4 +86,4 @@ Included: basic group setup, writer routing, optional proxy VIP, physical backup
 
 There are no separate preflight/validation roles or files. Essential setup checks remain around version replacement, bootstrap and restores. This branch has local checks; it is **not yet live-deployment or production validated**.
 
-[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md)
+[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Single-Proxy HA runbook](docs/runbook-single-proxy-ha.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md)
