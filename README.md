@@ -104,24 +104,66 @@ Before a client deploy, work through [the production checklist](docs/production-
 
 ## Use as an Ansible Galaxy collection
 
-This repository is packaged as the `opstree.percona` collection.
+Collection: `opstree.percona`. Requires **Ansible Core 2.16+**. Collection dependencies install automatically.
 
 ```bash
-# Build and publish (maintainers)
-ansible-galaxy collection build
-ansible-galaxy collection publish opstree-percona-1.0.0.tar.gz --api-key "$GALAXY_API_KEY"
-
-# Install and use
+# After publication to Galaxy
 ansible-galaxy collection install opstree.percona
 ```
 
-```yaml
-# In your own playbook
-- hosts: db
-  roles:
-    - opstree.percona.percona_server
+For a standalone server, create `inventory.ini` with your VM address:
+
+```ini
+[primary]
+db1 ansible_host=192.0.2.11 ansible_user=ubuntu
 ```
 
-The `opstree` namespace needs to exist on Galaxy (request it once at
-galaxy.ansible.com). The playbooks in `playbooks/` keep working from a git
-checkout too.
+Create `deploy.yml`:
+
+```yaml
+---
+- name: Install standalone Percona 8.4
+  hosts: primary
+  become: true
+  vars_prompt:
+  - name: percona_root_password
+    prompt: MySQL root password
+    private: true
+  vars:
+    percona_server_id: 101
+    percona_bind_address: '{{ ansible_host }}'
+  roles:
+  - opstree.percona.percona_server
+```
+
+```bash
+ansible-playbook -i inventory.ini deploy.yml
+```
+
+Use the same root password on reruns. For unattended use, put it in encrypted inventory variables instead of using `vars_prompt`. This example installs the server only; the complete deployment includes backups and monitoring.
+
+For the complete standalone or HA setup, copy the [example inventory directory](inventories/lab) into your project, replace the IPs, and create your own `group_vars/all/vault.yml` using [vault.example.yml](inventories/lab/group_vars/all/vault.example.yml). The real Vault file is never distributed in the collection.
+
+```bash
+ansible-playbook -i inventories/lab/hosts.yml opstree.percona.standalone --ask-vault-pass
+# Or three database nodes and two proxies:
+ansible-playbook -i inventories/lab/ha.yml opstree.percona.ha --ask-vault-pass
+```
+
+The group names `primary` (standalone) and `gr_members` (HA) are part of the inventory interface. Use `database`, `proxies`, `backup_sources` and `monitoring_targets` as shown in the examples.
+
+### Maintainer release
+
+```bash
+ansible-galaxy collection build --output-path dist
+# Test the built package locally before publishing:
+ansible-galaxy collection install dist/opstree-percona-1.0.0.tar.gz
+```
+
+Publishing requires access to the `opstree` Galaxy namespace. After reviewing the archive contents and completing the VM acceptance run:
+
+```bash
+ansible-galaxy collection publish dist/opstree-percona-1.0.0.tar.gz --api-key "$GALAXY_API_KEY"
+```
+
+Local build, installation and syntax checks do not establish production readiness. Follow the [acceptance walkthrough: deployment, rerun, failover and restore](docs/production-checklist.md#acceptance-walkthrough-deployment--rerun--failover--restore), which includes commands, pass criteria and a results table. Complete it before presenting this version as production-validated. Nothing is published automatically.

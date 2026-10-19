@@ -25,3 +25,17 @@ dependencies:
 build_ignore:
 - .git
 - .github
+- .agents
+- .codex
+- .aws
+- .gitignore
+- .pytest_cache
+- '**/__pycache__'
+- '**/*.pyc'
+- '**/vault.yml'
+- '**/vault.yaml'
+- '**/.vault_pass*'
+- '**/.env*'
+- '*.tar.gz'
+- dist
+- LOCAL-RUN.md
