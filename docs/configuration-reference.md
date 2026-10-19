@@ -41,6 +41,25 @@ percona_users:
 ansible-playbook -i inventories/lab/ha.yml playbooks/configure.yml --ask-vault-pass
 ```
 
+## Sizing notes
+
+`percona_buffer_pool_percent` defaults to 50% of detected RAM. That is a safe
+default for shared or small VMs: on 8 GB it gives a 4 GB pool and leaves room
+for connections, the OS, backups and the exporter. On a dedicated database
+server, 70% is the usual production target; set it explicitly:
+
+```yaml
+percona_buffer_pool_percent: 70
+```
+
+Sizes snap to 1 GB steps above 1 GB and 128 MB steps below, with a 128 MB
+floor, so the value always fits the server's chunk alignment.
+
+`percona_max_connections` (150) is modest on purpose; raise it only if the
+application really opens that many connections, because each one costs memory.
+`sync-binlog = 1` and `innodb-flush-log-at-trx-commit = 1` are fixed for
+durability and are not tunable here.
+
 This initial workflow restarts changed configurations. It is not a live-only tuner or a major-version upgrade command. Check application reconnect behavior before using it on active traffic.
 
 Root credentials must be consistent across the sample group. Recovery credentials are provisioned on offline members; online recovery-password rotation is deferred. Account changes use the currently elected writer rather than a fixed db1.

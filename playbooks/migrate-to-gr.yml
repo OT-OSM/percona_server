@@ -1,0 +1,24 @@
+---
+# Turn an existing standalone Percona 8.4 server into a 3-node Group Replication
+# group. The standalone becomes the seed (PRIMARY) with its data intact; two
+# fresh servers join as SECONDARY members.
+#
+# 1. Copy inventories/lab/migrate.yml and fill in the real IPs. The existing
+#    standalone MUST be listed first in gr_members.
+# 2. ansible-playbook -i inventories/lab/migrate.yml playbooks/preflight.yml --ask-vault-pass
+# 3. ansible-playbook -i inventories/lab/migrate.yml playbooks/migrate-to-gr.yml --ask-vault-pass
+# 4. ansible-playbook -i inventories/lab/migrate.yml playbooks/verify.yml --ask-vault-pass
+#
+# Expected outage: one MySQL restart on the seed when the group configuration
+# is applied. After migration, switch to the ha.yml inventory for daily use.
+- import_playbook: preflight.yml
+- name: Safety checks on the migration seed
+  hosts: seed
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Check the seed can join Group Replication
+    ansible.builtin.include_role:
+      name: percona_server
+      tasks_from: migrate_check
+- import_playbook: ha.yml

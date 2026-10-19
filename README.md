@@ -22,6 +22,8 @@ flowchart TB
 
 Run from the repository root. The controller needs Ansible Core 2.16+; target VMs need SSH, sudo and package download access.
 
+New to Ansible? Read [the beginner guide](docs/beginner-guide.md) first. It starts from zero: installing Ansible, SSH keys, what an inventory is, and then walks the same steps below.
+
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
@@ -98,4 +100,28 @@ Included: preflight checks, group setup, writer routing, optional proxy VIP, phy
 
 Before a client deploy, work through [the production checklist](docs/production-checklist.md). Day-to-day procedures live in [the operations runbook](docs/operations.md); when something breaks, start at [troubleshooting](docs/troubleshooting.md).
 
-[Architecture](docs/architecture.md) · [Lab steps](docs/lab-tasks.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md) · [Production checklist](docs/production-checklist.md) · [Operations runbook](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Local 4-server run](LOCAL-RUN.md)
+[Architecture](docs/architecture.md) · [Beginner guide](docs/beginner-guide.md) · [Lab steps](docs/lab-tasks.md) · [Configuration](docs/configuration-reference.md) · [Backups](docs/backup-and-restore.md) · [Monitoring](docs/monitoring.md) · [Production checklist](docs/production-checklist.md) · [Operations runbook](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Migrate standalone to group](docs/migrate-standalone-to-gr.md) · [Local 4-server run](LOCAL-RUN.md)
+
+## Use as an Ansible Galaxy collection
+
+This repository is packaged as the `opstree.percona` collection.
+
+```bash
+# Build and publish (maintainers)
+ansible-galaxy collection build
+ansible-galaxy collection publish opstree-percona-1.0.0.tar.gz --api-key "$GALAXY_API_KEY"
+
+# Install and use
+ansible-galaxy collection install opstree.percona
+```
+
+```yaml
+# In your own playbook
+- hosts: db
+  roles:
+    - opstree.percona.percona_server
+```
+
+The `opstree` namespace needs to exist on Galaxy (request it once at
+galaxy.ansible.com). The playbooks in `playbooks/` keep working from a git
+checkout too.
