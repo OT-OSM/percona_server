@@ -18,6 +18,11 @@
     name: proxysql
     state: started
     enabled: true
+- name: Wait for the local proxy admin listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 6032
+    timeout: 30
 - name: Try desired proxy administrator
   community.mysql.mysql_query:
     login_user: '{{ proxysql_admin_user }}'
@@ -26,6 +31,7 @@
     login_port: 6032
     config_file: ''
     query: SELECT 1
+    connect_timeout: 5
   changed_when: false
   register: proxy_desired
   failed_when: false
@@ -47,7 +53,16 @@
   ansible.builtin.assert:
     that:
     - proxy_desired.query_result is defined or proxy_initial.query_result is defined
-    fail_msg: Provide proxysql_bootstrap_admin_password for an existing proxy. Its state is never reset.
+    fail_msg: >-
+      Neither ProxySQL admin login succeeded on 127.0.0.1:6032.
+      {% set error = ((proxy_desired.msg | default('')) ~ ' ' ~ (proxy_initial.msg | default(''))) | lower %}
+      {% if 'access denied' in error %}Authentication was rejected. Verify the desired password or supply the existing password as proxysql_bootstrap_admin_password.
+      {% elif 'pymysql' in error or 'mysqlclient' in error %}The selected Python interpreter cannot load the required MySQL driver.
+      {% elif 'unsupported parameters' in error %}The loaded Ansible module does not support the supplied parameters; install requirements.yml.
+      {% elif 'connect' in error and ('refused' in error or 'timed out' in error or '2003' in error) %}The local admin connection failed; check the ProxySQL service and listener.
+      {% else %}The probe failed for an unclassified reason. Test SELECT 1 with a MySQL client on port 6032 to distinguish authentication from a module error.
+      {% endif %}
+      Existing proxy state has not been reset. Credentials remain hidden.
 - name: Update proxy admin credentials when bootstrap was required
   community.proxysql.proxysql_global_variables:
     login_user: '{{ proxysql_admin_user }}'
