@@ -22,8 +22,7 @@
   tasks:
   - name: Manage applications once
     ansible.builtin.include_role:
-      name: percona_server
-      tasks_from: applications
+      name: percona_access
     run_once: true
 - import_playbook: operations/proxysql.yml
 - import_playbook: operations/backup.yml

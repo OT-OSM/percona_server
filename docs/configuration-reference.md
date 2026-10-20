@@ -21,25 +21,27 @@ Edit [shared values](../inventories/group_vars/all/main.yml); use `host_vars/<ho
 | `percona_group_name` | One UUID shared by the group; do not change after setup |
 | `percona_group_seed` | Initial bootstrap node only; not a permanent writer |
 | `percona_group_password` | Recovery credential; use the same value on every member |
-| `percona_databases` / `percona_users` | Created on the discovered writer |
+| `percona_databases` / `percona_users` | Managed by `operations/access.yml` on the discovered writer |
 | `backup_schedule_enabled` | Example inventory enables daily full backups |
 | `proxysql_ha_enabled` | `false` until VIP/interface are supplied |
 
 ```yaml
 percona_max_connections: 300
 percona_innodb_buffer_pool_size: 2G
-percona_databases:
-- name: appdb
-percona_users:
-- name: reporting
-  host: '%'
-  password: '{{ vault_reporting_password }}'
-  priv: 'appdb.*:SELECT'
 ```
 
 ```bash
 ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/configure.yml --ask-vault-pass
 ```
+
+Database and user changes use a separate command, without restarting MySQL:
+
+```bash
+ansible-playbook -i inventories/group-two-proxies.yml playbooks/operations/access.yml --ask-vault-pass
+```
+
+See [database and user examples](../roles/percona_access/README.md) for adding,
+updating and removing entries. `configure.yml` only changes server settings.
 
 ## Sizing notes
 

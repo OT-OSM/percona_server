@@ -1,7 +1,7 @@
 ---
 - name: Discover current database writer
   ansible.builtin.include_role:
-    name: percona_server
+    name: percona_access
     tasks_from: discover
 - name: Create a dedicated proxy monitor account on the writer
   community.mysql.mysql_user:

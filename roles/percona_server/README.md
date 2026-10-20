@@ -10,7 +10,7 @@ flowchart LR
 Owns the MySQL configuration. Data and binlogs live in `/var/lib/mysql`.
 Every host in the `gr_members` inventory group gets the group configuration;
 there is no other mode. Application databases and users are created once on
-the elected writer by the deployment playbook, after the group forms.
+the elected writer by [percona_access](../percona_access/README.md), after the group forms.
 
 ```yaml
 percona_max_connections: 150

@@ -77,26 +77,31 @@ def main():
                 tasks.append({'name': 'Render '+role.name+'/'+template.name,
                               'ansible.builtin.template': {'src':str(template), 'dest':str(folder/(role.name+'-'+template.name[:-3]))},
                               'vars':variables})
-        defaults=yaml.safe_load((ROOT/'roles/percona_server/defaults/main.yml').read_text())
-        tasks.append({'name':'Render standalone','ansible.builtin.template':{
-            'src':str(ROOT/'roles/percona_server/templates/mysqld.cnf.j2'), 'dest':str(folder/'standalone.cnf')},
-            'vars':dict(defaults,percona_topology='standalone',ansible_facts={'memtotal_mb':4096})})
         # Exercise the actual selection expression with a promoted db2, not the initial seed.
-        selection = next(t for t in yaml.safe_load((ROOT/'roles/percona_server/tasks/discover.yml').read_text())
+        selection = next(t for t in yaml.safe_load((ROOT/'roles/percona_access/tasks/discover.yml').read_text())
                          if t['name']=='Select writer inventory name')
         selection=dict(selection,vars={'percona_writer_results':{'results':[
             {'item':'db1','query_result':[[]]}, {'item':'db2','query_result':[[{'MEMBER_HOST':'192.0.2.12'}]]},
             {'item':'db3','query_result':[[]]}]}})
         tasks.extend([selection,{'name':'Writer follows election','ansible.builtin.assert':{'that':"percona_writers == ['db2']"}}])
+        # Removing an account must not require its old password or grants.
+        user_task = yaml.safe_load((ROOT/'roles/percona_access/tasks/users.yml').read_text())[0]
+        args = user_task['community.mysql.mysql_user']
+        tasks.extend([
+            {'name': 'Render removed user arguments', 'ansible.builtin.set_fact':
+             {'removed_user': {k: args[k] for k in ('name', 'host', 'state', 'plugin', 'plugin_auth_string', 'salt', 'priv')}},
+             'vars': {'item': {'name': 'old_user', 'state': 'absent'}}},
+            {'name': 'Removal needs only identity and state', 'ansible.builtin.assert': {'that': [
+                "removed_user == {'name': 'old_user', 'host': 'localhost', 'state': 'absent'}"]}}
+        ])
         p=folder/'render.yml';p.write_text(yaml.safe_dump([{'hosts':'db1','gather_facts':False,'tasks':tasks}],sort_keys=False))
         run(['ansible-playbook','-i',str(inv),str(p)])
         group=(folder/'percona_server-mysqld.cnf').read_text()
         assert 'group-replication-group-seeds = 192.0.2.11:33061,192.0.2.12:33061,192.0.2.13:33061\n' in group
         assert 'group-replication-bootstrap-group = OFF' in group
-        assert 'plugin-load-add = group_replication.so' not in (folder/'standalone.cnf').read_text()
         for p in folder.glob('*.json'):
             json.loads(p.read_text())
-        print('All role templates, standalone configuration and promoted-writer selection: passed')
+        print('All role templates and promoted-writer selection: passed')
     run(['python3','-m','unittest','discover','-s','tests','-p','test_*.py'])
     print('Existing backup tests: passed')
     for path in [ROOT/'README.md', *ROOT.glob('docs/*.md'), *ROOT.glob('roles/*/README.md')]:

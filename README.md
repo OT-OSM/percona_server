@@ -88,6 +88,9 @@ New to Ansible? Start with [the beginner guide](docs/beginner-guide.md).
 # Apply configuration changes, one node at a time:
 ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/configure.yml --ask-vault-pass
 
+# Apply database/user changes without restarting MySQL:
+ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/access.yml --ask-vault-pass
+
 # One-command health check, any time:
 ansible-playbook -i inventories/group-one-proxy.yml playbooks/operations/verify.yml --ask-vault-pass
 ```
@@ -118,7 +121,8 @@ and the [operations runbook](docs/operations.md).
 [Beginner guide](docs/beginner-guide.md) ·
 [4-server lab](LOCAL-RUN.md)
 
-Six roles do the work: `percona_server`, `percona_group_replication`,
+Seven roles do the work: `percona_server`, `percona_group_replication`,
+[`percona_access`](roles/percona_access/README.md),
 `proxysql`, `proxysql_ha`, `percona_backup`, `mysql_exporter`. Run the
 playbooks, not the roles directly.
 
