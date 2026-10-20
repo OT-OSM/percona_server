@@ -16,8 +16,9 @@
       fail_msg: This setup supports Ubuntu 24.04 amd64 only.
   - name: Require enough memory on database nodes
     ansible.builtin.assert:
-      that: ansible_facts.memtotal_mb >= 4096
-      fail_msg: Database nodes need at least 4 GB RAM; 8 GB is recommended.
+      # Allow nominal 4 GB VMs whose OS-visible memory is below 4096 MiB.
+      that: ansible_facts.memtotal_mb | int >= 3584
+      fail_msg: "Detected {{ ansible_facts.memtotal_mb }} MiB RAM. This preflight requires at least 3584 MiB OS-visible memory for a nominal 4 GB VM."
     when: "'gr_members' in group_names or 'primary' in group_names"
   - name: Require free disk for data and backups
     ansible.builtin.assert:
