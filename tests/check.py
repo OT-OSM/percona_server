@@ -77,6 +77,21 @@ def main():
                 tasks.append({'name': 'Render '+role.name+'/'+template.name,
                               'ansible.builtin.template': {'src':str(template), 'dest':str(folder/(role.name+'-'+template.name[:-3]))},
                               'vars':variables})
+        # GR runs in a separate play and must not depend on server-role defaults.
+        gr_defaults = yaml.safe_load((ROOT/'roles/percona_group_replication/defaults/main.yml').read_text())
+        member = yaml.safe_load((ROOT/'roles/percona_group_replication/tasks/member.yml').read_text())
+        recovery = next(t for t in member if 'block' in t)['block']
+        query = next(t for t in recovery if t['name'] == 'Save recovery channel credentials')['community.mysql.mysql_query']['query']
+        for tls in (None, True):
+            variables = dict(gr_defaults)
+            if tls is not None:
+                variables['percona_gr_ssl'] = tls
+            tasks.extend([
+                {'name': 'Render recovery query with only GR defaults',
+                 'ansible.builtin.set_fact': {'recovery_query': query}, 'vars': variables},
+                {'name': 'Recovery TLS follows the selected setting', 'ansible.builtin.assert':
+                 {'that': "('SOURCE_SSL=1' in recovery_query) == " + ('true' if tls else 'false')}}
+            ])
         # Exercise the actual selection expression with a promoted db2, not the initial seed.
         selection = next(t for t in yaml.safe_load((ROOT/'roles/percona_access/tasks/discover.yml').read_text())
                          if t['name']=='Select writer inventory name')
