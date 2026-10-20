@@ -14,7 +14,7 @@ all:
               ansible_host: 172.31.6.109
               percona_server_id: 102
             db3:
-              ansible_host: 172.31.6.109
+              ansible_host: 172.31.10.25
               percona_server_id: 103
     proxies:
       hosts:

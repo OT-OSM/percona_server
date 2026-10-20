@@ -7,6 +7,12 @@
   become: true
   serial: 1
   any_errors_fatal: true
+  pre_tasks:
+  - name: Require a separate VM address for each database member
+    ansible.builtin.assert:
+      that:
+      - groups['gr_members'] | map('extract', hostvars) | map(attribute='ansible_host') | unique | length == groups['gr_members'] | length
+      fail_msg: Each database member needs a different ansible_host. Correct the inventory before installing.
   roles:
   - percona_server
 - name: Form the single-primary group
