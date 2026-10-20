@@ -9,9 +9,9 @@ percona_group_name: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 percona_group_seed: db1
 percona_group_password: '{{ vault_replication_password }}'
 percona_max_connections: 150
-percona_databases:
-- name: appdb
-percona_users: []
+# percona_databases:
+# - name: appdb
+# percona_users: []
 backup_db_password: '{{ vault_backup_password }}'
 backup_schedule_enabled: true
 exporter_db_password: '{{ vault_exporter_password }}'
