@@ -6,7 +6,7 @@
     login_unix_socket: '{{ hostvars[percona_account_host].percona_socket | default(percona_socket) }}'
     config_file: ''
     name: '{{ item.name }}'
-    host: '{{ proxysql_source_address }}'
+    host: '{{ proxysql_resolved_source_address }}'
     plugin: caching_sha2_password
     salt: "{{ (item.name | hash('sha256'))[:20] }}"
     plugin_auth_string: '{{ item.password }}'

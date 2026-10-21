@@ -16,7 +16,9 @@ proxysql_writer_hostgroup: 10
 proxysql_reader_hostgroup: 20
 proxysql_monitor_user: proxysql_monitor
 proxysql_monitor_password: ''
-proxysql_source_address: '{{ ansible_host | default(inventory_hostname) }}'
+# Empty: detect this proxy's IPv4 source address toward the current writer.
+# Override with the address MySQL sees when using NAT.
+proxysql_source_address: ''
 proxysql_users: []
 proxysql_query_rules: []
 proxysql_backup_writer_hostgroup: 30

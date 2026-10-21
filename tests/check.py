@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import tempfile
+from unittest.mock import patch
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +93,33 @@ def main():
                 {'name': 'Recovery TLS follows the selected setting', 'ansible.builtin.assert':
                  {'that': "('SOURCE_SSL=1' in recovery_query) == " + ('true' if tls else 'false')}}
             ])
+        # Exercise source selection with a mocked route; local checks require no network access.
+        proxy_tasks = yaml.safe_load((ROOT/'roles/proxysql/tasks/accounts.yml').read_text())
+        detect = next(t for t in proxy_tasks if t['name'] == 'Detect proxy source IPv4 address toward the writer')
+        import socket
+        script = detect['ansible.builtin.command']['argv'][2]
+        with patch('sys.argv', ['route', 'writer.example', '3306']), \
+             patch('socket.getaddrinfo', return_value=[(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('192.0.2.11', 3306))]) as lookup, \
+             patch('socket.socket') as factory, patch('builtins.print') as output:
+            connection = factory.return_value.__enter__.return_value
+            connection.getsockname.return_value = ('192.0.2.21', 45000)
+            exec(script, {})
+            lookup.assert_called_once_with('writer.example', 3306, socket.AF_INET, socket.SOCK_DGRAM)
+            connection.connect.assert_called_once_with(('192.0.2.11', 3306))
+            output.assert_called_once_with('192.0.2.21')
+            connection.send.assert_not_called()
+        detect = dict(detect, **{'ansible.builtin.command': {'argv': ['/usr/bin/python3', '-c', "print('127.0.0.1')"]}})
+        resolve = next(t for t in proxy_tasks if t['name'] == 'Resolve proxy account source address')
+        for override in ('', '192.0.2.99'):
+            tasks.append({'name': 'Detect or override source address', 'block': [detect, resolve],
+                          'vars': {'proxysql_source_address': override, 'percona_account_host': 'db1',
+                                   'percona_address': 'localhost'}})
+            tasks.append({'name': 'Source address matches route or override', 'ansible.builtin.assert':
+                          {'that': "proxysql_resolved_source_address == '" + (override or '127.0.0.1') + "'"}})
+        for filename in ('accounts.yml', 'users.yml'):
+            account_tasks = yaml.safe_load((ROOT/'roles/proxysql/tasks'/filename).read_text())
+            account = next(t['community.mysql.mysql_user'] for t in account_tasks if 'community.mysql.mysql_user' in t)
+            assert account['host'] == '{{ proxysql_resolved_source_address }}'
         # Exercise the actual selection expression with a promoted db2, not the initial seed.
         selection = next(t for t in yaml.safe_load((ROOT/'roles/percona_access/tasks/discover.yml').read_text())
                          if t['name']=='Select writer inventory name')
