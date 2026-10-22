@@ -6,10 +6,10 @@
     login_unix_socket: '{{ percona_socket }}'
     config_file: ''
     name: '{{ item.name }}'
-    host: '{{ item.host | default(''localhost'') }}'
+    host: '{{ item.host | default(''%'') }}'
     plugin: '{{ (item.plugin | default("caching_sha2_password")) if item.state | default("present") == "present" else omit }}'
     plugin_auth_string: '{{ item.password if item.state | default("present") == "present" else omit }}'
-    salt: '{{ ((item.name ~ '':'' ~ (item.host | default(''localhost''))) | hash(''sha256''))[:20] if item.state | default(''present'') == ''present'' and item.plugin
+    salt: '{{ ((item.name ~ '':'' ~ (item.host | default(''%''))) | hash(''sha256''))[:20] if item.state | default(''present'') == ''present'' and item.plugin
       | default(''caching_sha2_password'') == ''caching_sha2_password'' else omit }}'
     priv: '{{ item.priv if item.state | default("present") == "present" else omit }}'
     state: '{{ item.state | default(''present'') }}'

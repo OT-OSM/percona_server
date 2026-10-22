@@ -68,4 +68,4 @@ sudo /usr/local/bin/percona-backup backup full
 sudo /usr/local/bin/percona-binlog-ship /var/backup/binlog /etc/percona-backup/client.cnf
 ```
 
-Then run `playbooks/operations/verify.yml` with the same inventory. Use `playbooks/operations/configure.yml` after changing settings. Exact examples are in the [main README](../README.md#verify-or-change-settings-later).
+Then run `playbooks/operations/verify.yml` with the same inventory. Use `playbooks/operations/configure.yml` after changing settings. Exact examples are in the [main README](../README.md#later-change-settings-verify-health).

@@ -3,28 +3,6 @@
   ansible.builtin.include_role:
     name: percona_access
     tasks_from: discover
-- name: Detect proxy source IPv4 address toward the writer
-  ansible.builtin.command:
-    argv:
-    - /usr/bin/python3
-    - -c
-    - |
-      import socket
-      import sys
-      # UDP connect selects a local route without sending a packet or logging in.
-      address = socket.getaddrinfo(sys.argv[1], int(sys.argv[2]), socket.AF_INET, socket.SOCK_DGRAM)[0][4]
-      with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
-          connection.connect(address)
-          print(connection.getsockname()[0])
-    - '{{ hostvars[percona_account_host].percona_address | default(hostvars[percona_account_host].ansible_host | default(percona_account_host)) }}'
-    - '{{ hostvars[percona_account_host].percona_port | default(3306) | string }}'
-  register: proxysql_source_route
-  changed_when: false
-  check_mode: false
-  when: proxysql_source_address | length == 0
-- name: Resolve proxy account source address
-  ansible.builtin.set_fact:
-    proxysql_resolved_source_address: '{{ proxysql_source_address if proxysql_source_address | length > 0 else proxysql_source_route.stdout | trim }}'
 - name: Create a dedicated proxy monitor account on the writer
   community.mysql.mysql_user:
     login_user: '{{ hostvars[percona_account_host].percona_root_username | default(percona_root_username) }}'
@@ -32,7 +10,7 @@
     login_unix_socket: '{{ hostvars[percona_account_host].percona_socket | default(percona_socket) }}'
     config_file: ''
     name: '{{ proxysql_monitor_user }}'
-    host: '{{ proxysql_resolved_source_address }}'
+    host: '%'
     plugin: caching_sha2_password
     salt: "{{ (proxysql_monitor_user | hash('sha256'))[:20] }}"
     plugin_auth_string: '{{ proxysql_monitor_password }}'

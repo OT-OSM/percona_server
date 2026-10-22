@@ -5,15 +5,9 @@
     login_password: '{{ percona_root_password }}'
     login_unix_socket: '{{ percona_socket }}'
     config_file: ''
-    query: >-
-      {% if groups.get('gr_members', []) | length %}
-      SELECT MEMBER_HOST FROM performance_schema.replication_group_members
-      WHERE MEMBER_ID=@@server_uuid AND MEMBER_STATE='ONLINE' AND MEMBER_ROLE='PRIMARY'
-      {% else %}
-      SELECT @@hostname AS MEMBER_HOST WHERE @@global.read_only=0
-      {% endif %}
+    query: SELECT MEMBER_HOST FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@server_uuid AND MEMBER_STATE='ONLINE' AND MEMBER_ROLE='PRIMARY'
   delegate_to: '{{ item }}'
-  loop: "{{ groups.get('gr_members', []) if groups.get('gr_members', []) | length else groups['primary'] }}"
+  loop: "{{ groups['gr_members'] }}"
   register: percona_writer_results
   changed_when: false
   no_log: true

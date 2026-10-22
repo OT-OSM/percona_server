@@ -54,7 +54,7 @@
     max_connections: 100
     comment: percona-ansible
     state: present
-  loop: "{{ groups.get('gr_members', []) if groups.get('gr_members', []) | length else groups['primary'] }}"
+  loop: "{{ groups['gr_members'] }}"
   no_log: true
 
 - name: Activate and persist backend configuration

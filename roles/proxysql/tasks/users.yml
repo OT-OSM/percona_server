@@ -1,12 +1,12 @@
 ---
-- name: Create matching database app accounts for this proxy source
+- name: Create matching database app accounts
   community.mysql.mysql_user:
     login_user: '{{ hostvars[percona_account_host].percona_root_username | default(percona_root_username) }}'
     login_password: '{{ hostvars[percona_account_host].percona_admin_password | default(percona_root_password) }}'
     login_unix_socket: '{{ hostvars[percona_account_host].percona_socket | default(percona_socket) }}'
     config_file: ''
     name: '{{ item.name }}'
-    host: '{{ proxysql_resolved_source_address }}'
+    host: '%'
     plugin: caching_sha2_password
     salt: "{{ (item.name | hash('sha256'))[:20] }}"
     plugin_auth_string: '{{ item.password }}'

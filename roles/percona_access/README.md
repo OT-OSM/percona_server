@@ -57,7 +57,7 @@ percona_users:
 ```
 
 `priv` replaces the managed account's grants, so list every privilege it should
-retain. The default host is `localhost`. Tables and schema migrations are
+retain. The default host is `%` (any host). Tables and schema migrations are
 managed separately.
 
 Backup, exporter, recovery and ProxySQL accounts stay in their existing roles.

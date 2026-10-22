@@ -64,9 +64,9 @@ ansible-playbook playbooks/operations/monitoring.yml --ask-vault-pass
 # Verify expects a completed recent backup.
 ansible-playbook playbooks/operations/verify.yml --ask-vault-pass
 
-# Proxy source-IP detection: leave proxysql_source_address unset/empty for automatic detection.
+# Proxy-facing accounts use the '%' host wildcard, so IP changes need no account updates.
 nano inventories/group_vars/proxies.yml
-# After source-IP or credential changes:
+# After credential changes:
 ansible-playbook playbooks/operations/proxysql.yml --ask-vault-pass
 ```
 

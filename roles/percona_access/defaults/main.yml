@@ -21,7 +21,7 @@ percona_users: []
 #     plugin: caching_sha2_password    # Optional; this is the default.
 #     state: present                   # Optional; this is the default.
 #   - name: report_reader
-#     host: localhost                  # Optional; omitted host defaults to localhost.
+#     host: localhost                  # Optional; omitted host defaults to '%' (any host).
 #     password: "{{ vault_report_reader_password }}"
 #     priv: "appdb.*:SELECT/reporting.*:SELECT"
 #
